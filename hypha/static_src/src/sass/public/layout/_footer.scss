@@ -4,8 +4,8 @@
     @include media-query(tablet-portrait) {
         background: linear-gradient(
             to right,
-            $color--dark-blue 50%,
-            $color--light-blue 50%
+            $color--mid-grey 50%,
+            $color--mid-dark-grey 50%
         );
     }
 
@@ -21,11 +21,11 @@
         }
 
         &:first-child {
-            background: $color--dark-blue;
+            background: $color--mid-dark-grey;
         }
 
         &:last-child {
-            background: $color--light-blue;
+            background: $color--mid-dark-grey;
         }
     }
 

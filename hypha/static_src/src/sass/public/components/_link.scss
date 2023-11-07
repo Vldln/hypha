@@ -6,7 +6,7 @@
     }
 
     &--button {
-        @include button($color--light-blue, $color--darkest-blue);
+        @include button($color--mid-dark-grey, $color--dark-grey);
         display: inline-block;
         line-height: 1;
 
@@ -30,13 +30,13 @@
     }
 
     &--button-secondary {
-        @include button($color--purple, darken($color--purple, 20%));
+        @include button($color--eq, darken($color--eq, 20%));
     }
 
     &--button-tertiary {
-        @include button(transparent, darken($color--purple, 20%));
-        color: $color--purple;
-        border-color: $color--purple;
+        @include button(transparent, darken($color--eq, 20%));
+        color: $color--eq;
+        border-color: $color--eq;
 
         &:focus,
         &:hover {
@@ -45,7 +45,7 @@
     }
 
     &--button-transparent {
-        @include button(transparent, $color--darkest-blue);
+        @include button(transparent, $color--eq);
         color: $color--white;
 
         &:focus,
@@ -107,7 +107,7 @@
     }
 
     &--fixed-apply {
-        @include button($color--purple, darken($color--purple, 20%));
+        @include button($color--eq, darken($color--eq, 20%));
         position: fixed;
         bottom: 0;
         z-index: 100;
@@ -130,7 +130,7 @@
     }
 
     &--arrow-pixels-blue {
-        @include pixel-link($color--dark-blue);
+        @include pixel-link($color--eq);
     }
 
     &--arrow-pixels-white {

@@ -37,6 +37,7 @@ $color--green: #7dc558;
 $color--pastel-red: #f1a9a9;
 $color--pastel-green: #afe6af;
 $color--fog: #eff2f5;
+$color--eq: #fe5000;
 
 // Social
 $color--twitter: #1da6f6;
@@ -58,10 +59,10 @@ $color--white-10: rgba(255, 255, 255, 0.1);
 
 // Assignment
 $color--default: $color--black;
-$color--primary: $color--light-blue;
+$color--primary: $color--eq;
 $color--error: $color--tomato;
 $color--correct: $color--mint;
-$color--button-disabled: $color--lighter-blue;
+$color--button-disabled: $color--white-40;
 
 // Fonts
 $font--primary: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto,
