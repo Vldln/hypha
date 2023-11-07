@@ -18,7 +18,7 @@
         height: auto;
         min-height: 250px;
         padding-bottom: 0;
-        background: $color--white;
+        background: $color--mid-dark-grey;
 
         &::after {
             display: none;
@@ -74,7 +74,7 @@
         }
 
         .header--light-bg & {
-            color: $color--dark-grey;
+            color: $color--white;
             text-shadow: none;
         }
 
@@ -246,7 +246,7 @@
             bottom: -55px;
             width: 328px;
             height: 567px;
-            fill: $color--white;
+            fill: $color--eq;
         }
     }
 

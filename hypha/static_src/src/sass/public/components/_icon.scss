@@ -136,7 +136,7 @@
         display: none;
         width: 218px;
         height: 457px;
-        fill: $color--dark-blue;
+        fill: $color--eq;
 
         @include media-query(desktop) {
             display: block;
@@ -150,7 +150,7 @@
         display: none;
         width: 109px;
         height: 275px;
-        fill: $color--dark-blue;
+        fill: $color--eq;
 
         @include media-query(desktop) {
             display: block;
