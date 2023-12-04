@@ -1,5 +1,6 @@
 -r requirements.txt
 
+black==23.10.0
 coverage==7.3.2
 django-browser-reload==1.12.1
 django-coverage-plugin==3.1.0
@@ -14,7 +15,6 @@ pytest-django==4.5.2
 pytest-split==0.8.1
 pytest-xdist[psutil]==3.3.1
 responses==0.23.3
-ruff==0.1.7
-time-machine==2.13.0
+ruff==0.1.1
 wagtail-factories==2.1.0
 Werkzeug==2.2.3
