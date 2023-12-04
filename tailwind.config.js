@@ -12,7 +12,6 @@ module.exports = {
                 "dark-blue": "#0c72a0",
                 tomato: "#f05e54",
                 "mid-grey": "#cfcfcf",
-                "light-grey": "#f7f7f7",
                 arsenic: "#404041",
                 "fg-muted": "var(--color-fg-muted)",
                 "fg-default": "var(--color-fg-default)",
