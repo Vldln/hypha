@@ -1,1 +1,12 @@
 // stylelint-disable no-empty-source
+.link--button-secondary{
+    white-space: nowrap;
+    padding: 0.5em 30px;
+}
+
+.header__menus--mobile .is-visible{
+    a, button{
+        margin-left: auto;
+        margin-right: auto;
+    }
+}

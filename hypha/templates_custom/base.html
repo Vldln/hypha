@@ -163,9 +163,11 @@
                                 {% trans "Log out" %}
                             </a>
                         {% endif %}
+
                         {% if ENABLE_PUBLIC_SIGNUP and request.path != '/register/' %}
                             {% include "utils/includes/register_button.html" %}
                         {% endif %}
+
                         {% if ENABLE_GOOGLE_TRANSLATE %}
                             <div class="button button--google-translate" id="google_translate_element"></div>
                         {% endif %}
