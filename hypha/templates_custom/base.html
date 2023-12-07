@@ -164,7 +164,7 @@
                             </a>
                         {% endif %}
 
-                        {% if ENABLE_PUBLIC_SIGNUP and request.path != '/register/' %}
+                        {% if ENABLE_PUBLIC_SIGNUP and request.path != '/register/' and not request.user.is_authenticated %}
                             {% include "utils/includes/register_button.html" %}
                         {% endif %}
 
