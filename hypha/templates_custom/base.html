@@ -21,7 +21,7 @@
         <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/favicons/favicon-32x32.png' %}">
         <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/favicons/favicon-16x16.png' %}">
         <link rel="manifest" href="{% static 'images/favicons/site.webmanifest' %}">
-        <link rel="mask-icon" href="{% static 'images/favicons/safari-pinned-tab.svg' %}" color="#5bbad5">
+        <link rel="mask-icon" href="{% static 'images/favicons/safari-pinned-tab.svg' %}">
         <link rel="shortcut icon" href="{% static 'images/favicons/favicon.ico' %}">
 
 
@@ -35,7 +35,7 @@
             {% image page.social_image width-320 as social_img %}
             <meta name="twitter:image" content="{% if page.social_image.is_stored_locally %}{{ current_site.root_url }}{% endif %}{{ social_img.url }}">
         {% else %}
-            <meta name="twitter:image" content="{{ current_site.root_url }}{% static 'images/otf_social.jpg' %}">
+            <meta name="twitter:image" content="{{ current_site.root_url }}{% static 'images/eq_snippet.png' %}">
         {% endif %}
 
         <!--facebook opengraph tags-->
@@ -46,7 +46,7 @@
         {% if page.social_image %}
             <meta property="og:image" content="{% if page.social_image.is_stored_locally %}{{ current_site.root_url }}{% endif %}{{ social_img.url }}" />
         {% else %}
-            <meta property="og:image" content="{{ current_site.root_url }}{% static 'images/otf_social.jpg' %}" />
+            <meta property="og:image" content="{{ current_site.root_url }}{% static 'images/eq_snippet.png' %}" />
         {% endif %}
         <meta property="og:description" content="{{ page|social_text:current_site }}" />
         <meta property="og:site_name" content="{{ settings.utils.SocialMediaSettings.site_name }}" />
