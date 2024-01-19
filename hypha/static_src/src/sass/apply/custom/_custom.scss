@@ -11,3 +11,33 @@
         margin-right: auto;
     }
 }
+
+.icon {
+    &--body-pixels-right {
+        fill: $color--eq;
+    }
+
+    &--body-pixels-left {
+        fill: $color--eq;
+    }
+}
+
+.header {
+    &--light-bg {
+        background: $color--mid-dark-grey;
+    }
+    &__title {
+        .header--light-bg & {
+            color: $color--white;
+        }
+    }
+    &__icon {
+        &--pixels-right-home {
+            fill: $color--eq;
+        }
+    }
+}
+
+:root {
+    --color-header-bg: #919191;
+}
