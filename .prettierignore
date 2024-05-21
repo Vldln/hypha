@@ -27,3 +27,6 @@ htmlcov/**
 # Ignore Sublime Text files.
 *.sublime-project
 *.sublime-workspace
+
+# Ignore Custom files
+**/custom.scss
