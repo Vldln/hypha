@@ -29,4 +29,4 @@ htmlcov/**
 *.sublime-workspace
 
 # Ignore Custom files
-**/custom.scss
+**/_custom.scss
