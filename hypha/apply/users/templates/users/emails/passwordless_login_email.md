@@ -2,7 +2,7 @@
 {% blocktrans %}Hello {{ user }},{% endblocktrans %}
 
 {% if is_active %}
-Thank you for registering an account on eQualitie’s Grant Programs & Opportunities  application system. Finish account creation by clicking the link below or copy/paste it in your browser:
+{% blocktrans %}Thank you for registering an account on eQualitie’s Grant Programs & Opportunities  application system. Finish account creation by clicking the link below or copy/paste it in your browser:
 {% endblocktrans %}
 
 {% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}{{ login_path }}
