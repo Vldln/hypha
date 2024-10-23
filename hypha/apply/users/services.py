@@ -91,7 +91,7 @@ class PasswordlessAuthService:
             }
         )
 
-        subject = "Log in to {username} at {org_long_name}".format(**context)
+        subject = "Log in to {username} at eQualitie's application system".format(**context)
         # Force subject to a single line to avoid header-injection issues.
         subject = "".join(subject.splitlines())
 
@@ -115,7 +115,7 @@ class PasswordlessAuthService:
             }
         )
 
-        subject = "Welcome to {org_long_name}".format(**context)
+        subject = "Registration on eQualitie's application system".format(**context)
         # Force subject to a single line to avoid header-injection issues.
         subject = "".join(subject.splitlines())
 
