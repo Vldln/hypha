@@ -1,8 +1,9 @@
 {% load i18n wagtailadmin_tags %}{% base_url_setting as base_url %}{% firstof name username as user %}
-{% blocktrans %}Dear {{ user }},{% endblocktrans %}
+{% blocktrans %}Hello {{ user }},{% endblocktrans %}
 
 {% if is_active %}
-{% blocktrans %}Login to your account on the {{ org_long_name }} web site by clicking this link or copying and pasting it to your browser:{% endblocktrans %}
+Thank you for registering an account on eQualitie’s Grant Programs & Opportunities  application system. Finish account creation by clicking the link below or copy/paste it in your browser:
+{% endblocktrans %}
 
 {% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}{{ login_path }}
 
@@ -18,7 +19,7 @@
 {% blocktrans %}If you have any questions, please contact us at {{ org_email }}.{% endblocktrans %}
 {% endif %}
 
-{% blocktrans %}Kind Regards,
+{% blocktrans %}Regards,
 The {{ org_short_name }} Team{% endblocktrans %}
 
 --
