@@ -1,7 +1,7 @@
 {% load i18n wagtailadmin_tags %}{% base_url_setting as base_url %}
 {% blocktrans %}Hello {% endblocktrans %}
 
-{% blocktrans %}Thank you for registering an account on eQualitie’s Grant Programs & Opportunities  application system. Finish account creation by clicking the link below or copy/paste it in your browser:
+{% blocktrans %}Thank you for registering an account on eQualitie's *Grant Programs & Opportunities* application system. Finish account creation by clicking the link below or copy/paste it in your browser:
 {% endblocktrans %}
 
 {% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}{{ signup_path }}
@@ -14,9 +14,8 @@
 {% blocktrans %}If you have any questions, please contact us at {{ org_email }}.{% endblocktrans %}
 {% endif %}
 
-{% blocktrans %}Regards,
-The {{ org_short_name }} Team{% endblocktrans %}
+{% blocktrans %}Regards,{% endblocktrans %}
 
 --
 {{ org_long_name }}
-{% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}
+https://equalit.ie
