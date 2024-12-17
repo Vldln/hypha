@@ -53,6 +53,11 @@ def user_can_submit_contract(project, user, contract):
 
 
 @register.simple_tag
+def required_remaining_contracting_doc_categories(remaining_categories):
+    return [category for category in remaining_categories if category.required]
+
+
+@register.simple_tag
 def user_can_upload_contract(project, user):
     can_upload, _ = has_permission(
         "contract_upload", user, object=project, raise_exception=False
@@ -85,3 +90,15 @@ def can_update_contracting_documents(project, user):
     if user == project.user and not user.is_apply_staff and not user.is_contracting:
         return True
     return False
+
+
+@register.simple_tag
+def can_access_category_document(project, user, category):
+    permission, _ = has_permission(
+        "view_contract_documents",
+        user,
+        object=project,
+        contract_category=category,
+        raise_exception=False,
+    )
+    return permission

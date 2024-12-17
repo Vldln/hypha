@@ -22,6 +22,7 @@ neat_related = {
     MESSAGES.PROJECT_TRANSITION: "old_stage",
     MESSAGES.APPROVE_PAF: "paf_approvals",  # expect a list
     MESSAGES.UPDATE_PROJECT_LEAD: "old_lead",
+    MESSAGES.UPDATE_PROJECT_TITLE: "old_title",
     MESSAGES.APPROVE_CONTRACT: "contract",
     MESSAGES.UPLOAD_CONTRACT: "contract",
     MESSAGES.CREATE_INVOICE: "create_invoice",
@@ -37,6 +38,7 @@ neat_related = {
     MESSAGES.DELETE_REMINDER: "reminder",
     MESSAGES.REVIEW_REMINDER: "reminder",
     MESSAGES.BATCH_UPDATE_INVOICE_STATUS: "invoices",
+    MESSAGES.REMOVE_TASK: "task",
 }
 
 
@@ -171,11 +173,13 @@ class AdapterBase:
         kwargs.update(self.get_neat_related(message_type, related))
         kwargs.update(self.extra_kwargs(message_type, **kwargs))
 
-        message = self.message(message_type, **kwargs)
-        if not message:
-            return
-
         for recipient in recipients:
+            # Allow for customization of message based on recipient string (will vary based on adapter)
+            message_kwargs = {**kwargs, "recipient": recipient}
+            message = self.message(message_type, **message_kwargs)
+            if not message:
+                continue
+
             message_logs = self.create_logs(message, recipient, *events)
 
             if settings.SEND_MESSAGES or self.always_send:

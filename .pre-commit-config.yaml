@@ -1,6 +1,42 @@
 repos:
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.5.2
+    hooks:
+      - id: uv-export
+        name: uv-export requirements.txt
+        args:
+          [
+            "--frozen",
+            "--no-group",
+            "dev",
+            "--no-group",
+            "docs",
+            "-o",
+            "requirements/prod.txt",
+          ]
+      - id: uv-export
+        name: uv-export requirements/dev.txt
+        args: ["--frozen", "--group", "dev", "-o", "requirements/dev.txt"]
+      - id: uv-export
+        name: uv-export requirements/docs.txt
+        args:
+          ["--frozen", "--only-group", "docs", "-o", "requirements/docs.txt"]
+
+      # This is disabled because this doesn't export --find-links. The requirements-translate is maintained manually.
+      # - id: uv-export
+      #   name: uv-export requirements/translate.txt
+      #   args:
+      #     [
+      #       "--frozen",
+      #       "--only-group",
+      #       "translate",
+      #       "-o",
+      #       "requirements/translate.txt",
+      #     ]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.3
+    rev: v0.7.0
     hooks:
       # Run the linter.
       - id: ruff
@@ -9,12 +45,37 @@ repos:
       - id: ruff-format
 
   - repo: https://github.com/rtts/djhtml
-    rev: "3.0.6"
+    rev: "3.0.7"
     hooks:
       - id: djhtml
         files: .*/templates/.*\.html$
 
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
+        files: .*\.{css,js,json,scss,yml,yaml}$
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.13.0
+    hooks:
+      - id: eslint
+        files: .*/static_src/javascript/.*\.js$
+        additional_dependencies:
+          - eslint@9.12.0
+          - globals@15.11.0
+          - eslint-config-prettier@8.10.0
+          - eslint-plugin-template@0.7.0
+          - eslint-plugin-jsdoc@50.3.1
+          - "@eslint/js@9.12.0"
+          - "@eslint/eslintrc@3.1.0"
+
+  - repo: https://github.com/awebdeveloper/pre-commit-stylelint
+    rev: "0.0.2"
+    hooks:
+      - id: stylelint
+        files: .*/static_src/sass/.*\.scss$
+        additional_dependencies:
+          - stylelint@16.10.0
+          - stylelint-config-standard@36.0.1
+          - stylelint-config-standard-scss@13.1.0

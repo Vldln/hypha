@@ -1,6 +1,5 @@
 from collections import defaultdict
 
-from django.conf import settings
 from django.db.models import Count
 from django.utils.translation import gettext as _
 
@@ -8,7 +7,6 @@ from hypha.apply.activity.options import MESSAGES
 from hypha.apply.projects.models import ProjectSettings
 from hypha.apply.projects.models.payment import (
     APPROVED_BY_FINANCE,
-    APPROVED_BY_FINANCE_2,
     CHANGES_REQUESTED_BY_STAFF,
     DECLINED,
     PAID,
@@ -16,12 +14,12 @@ from hypha.apply.projects.models.payment import (
     RESUBMITTED,
     SUBMITTED,
 )
-from hypha.apply.users.groups import (
+from hypha.apply.users.models import User
+from hypha.apply.users.roles import (
     CONTRACTING_GROUP_NAME,
     FINANCE_GROUP_NAME,
     STAFF_GROUP_NAME,
 )
-from hypha.apply.users.models import User
 
 
 def link_to(target, request):
@@ -60,13 +58,12 @@ def is_invoice_public_transition(invoice):
         SUBMITTED,
         RESUBMITTED,
         CHANGES_REQUESTED_BY_STAFF,
-        APPROVED_BY_FINANCE_2,
         DECLINED,
         PAID,
         PAYMENT_FAILED,
     ]:
         return True
-    if not settings.INVOICE_EXTENDED_WORKFLOW and invoice.status == APPROVED_BY_FINANCE:
+    if invoice.status == APPROVED_BY_FINANCE:
         return True
     return False
 
@@ -136,4 +133,4 @@ def get_users_for_groups(groups, user_queryset=None, exact_match=False):
             user_queryset = user_queryset.filter(groups__name=groups.pop().name)
         return get_users_for_groups(groups, user_queryset=user_queryset)
     else:
-        return user_queryset
+        return user_queryset if user_queryset is not None else set()

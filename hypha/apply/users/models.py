@@ -1,6 +1,5 @@
-from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import AbstractUser, BaseUserManager, Group
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core import exceptions
 from django.db import IntegrityError, models
 from django.db.models.constants import LOOKUP_SEP
@@ -13,7 +12,7 @@ from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.contrib.settings.models import BaseGenericSetting, register_setting
 from wagtail.fields import RichTextField
 
-from .groups import (
+from .roles import (
     APPLICANT_GROUP_NAME,
     APPROVER_GROUP_NAME,
     COMMUNITY_REVIEWER_GROUP_NAME,
@@ -28,6 +27,7 @@ from .utils import (
     get_user_by_email,
     is_user_already_registered,
     send_activation_email,
+    strip_html_and_nerf_urls,
 )
 
 
@@ -58,16 +58,6 @@ class UserQuerySet(models.QuerySet):
 
     def finances(self):
         return self.filter(groups__name=FINANCE_GROUP_NAME, is_active=True)
-
-    def finances_level_1(self):
-        return self.filter(groups__name=FINANCE_GROUP_NAME, is_active=True).exclude(
-            groups__name=APPROVER_GROUP_NAME
-        )
-
-    def finances_level_2(self):
-        return self.filter(groups__name=FINANCE_GROUP_NAME, is_active=True).filter(
-            groups__name=APPROVER_GROUP_NAME
-        )
 
     def contracting(self):
         return self.filter(groups__name=CONTRACTING_GROUP_NAME, is_active=True)
@@ -170,6 +160,8 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
             elif not user.is_active:
                 raise IntegrityError("Found an inactive account")
         else:
+            if kwargs.get("full_name", False):
+                kwargs["full_name"] = strip_html_and_nerf_urls(kwargs["full_name"])
             if "password" in kwargs:
                 # Coming from registration without application
                 temp_pass = kwargs.pop("password")
@@ -221,21 +213,34 @@ class User(AbstractUser):
     wagtail_reference_index_ignore = True
 
     def __str__(self):
-        return self.get_full_name() if self.get_full_name() else self.get_short_name()
+        return self.get_display_name()
 
     def get_full_name(self):
         return self.full_name.strip()
 
-    def get_short_name(self):
-        return self.email
+    def get_short_name(self) -> str:
+        """Gets the local-part (username) of the user's email
 
-    def get_full_name_with_group(self):
-        is_apply_staff = f" ({STAFF_GROUP_NAME})" if self.is_apply_staff else ""
-        is_reviewer = f" ({REVIEWER_GROUP_NAME})" if self.is_reviewer else ""
-        is_applicant = f" ({APPLICANT_GROUP_NAME})" if self.is_applicant else ""
-        is_finance = f" ({FINANCE_GROUP_NAME})" if self.is_finance else ""
-        is_contracting = f" ({CONTRACTING_GROUP_NAME})" if self.is_contracting else ""
-        return f"{self.full_name.strip()}{is_apply_staff}{is_reviewer}{is_applicant}{is_finance}{is_contracting}"
+        ie. hyphaiscool@hypha.app returns "hyphaiscool"
+        """
+        return self.email.split("@")[0]
+
+    def get_display_name(self):
+        return self.full_name.strip() if self.full_name else self.get_short_name()
+
+    def get_role_names(self):
+        roles = []
+        if self.is_apply_staff:
+            roles.append(STAFF_GROUP_NAME)
+        if self.is_reviewer:
+            roles.append(REVIEWER_GROUP_NAME)
+        if self.is_applicant:
+            roles.append(APPLICANT_GROUP_NAME)
+        if self.is_finance:
+            roles.append(FINANCE_GROUP_NAME)
+        if self.is_contracting:
+            roles.append(CONTRACTING_GROUP_NAME)
+        return roles
 
     @cached_property
     def roles(self):
@@ -244,10 +249,6 @@ class User(AbstractUser):
     @cached_property
     def is_apply_staff(self):
         return self.groups.filter(name=STAFF_GROUP_NAME).exists() or self.is_superuser
-
-    @cached_property
-    def is_apply_staff_or_finance(self):
-        return self.is_apply_staff or self.is_finance
 
     @cached_property
     def is_apply_staff_admin(self):
@@ -280,11 +281,8 @@ class User(AbstractUser):
         return self.groups.filter(name=FINANCE_GROUP_NAME).exists()
 
     @cached_property
-    def is_finance_level_1(self):
-        return (
-            self.groups.filter(name=FINANCE_GROUP_NAME).exists()
-            and not self.groups.filter(name=APPROVER_GROUP_NAME).exists()
-        )
+    def is_org_faculty(self):
+        return self.is_apply_staff or self.is_finance or self.is_contracting
 
     @cached_property
     def can_access_dashboard(self):
@@ -296,16 +294,6 @@ class User(AbstractUser):
             or self.is_finance
             or self.is_contracting
             or self.is_applicant
-        )
-
-    @cached_property
-    def is_finance_level_2(self):
-        # disable finance2 user if invoice flow in not extended
-        if not settings.INVOICE_EXTENDED_WORKFLOW:
-            return False
-        return (
-            self.groups.filter(name=FINANCE_GROUP_NAME).exists()
-            & self.groups.filter(name=APPROVER_GROUP_NAME).exists()
         )
 
     @cached_property
@@ -366,27 +354,6 @@ class AuthSettings(BaseGenericSetting):
             _("Login form customizations"),
         ),
     ]
-
-
-class GroupDesc(models.Model):
-    group = models.OneToOneField(Group, on_delete=models.CASCADE, primary_key=True)
-    help_text = models.CharField(verbose_name="Help Text", max_length=255)
-
-    @staticmethod
-    def get_from_group(group_obj: Group) -> str | None:
-        """
-        Get the group description/help text string from a Group object. Returns None if group doesn't have a help text entry.
-
-        Args:
-            group_obj (Group): The group to retrieve the description of.
-        """
-        try:
-            return GroupDesc.objects.get(group_id=group_obj.id).help_text
-        except (exceptions.ObjectDoesNotExist, exceptions.FieldError):
-            return None
-
-    def __str__(self):
-        return self.help_text
 
 
 class PendingSignup(models.Model):

@@ -2,11 +2,15 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 from .views import (
+    ApproveContractView,
+    BatchUpdateInvoiceStatusView,
     CategoryTemplatePrivateMediaView,
+    ChangeInvoiceStatusView,
+    ChangePAFStatusView,
+    ChangeProjectstatusView,
     ContractDocumentPrivateMediaView,
     ContractPrivateMediaView,
     CreateInvoiceView,
-    CreateVendorView,
     DeleteInvoiceView,
     EditInvoiceView,
     InvoiceListView,
@@ -20,16 +24,35 @@ from .views import (
     ProjectPrivateMediaView,
     ProjectSOWDownloadView,
     ProjectSOWView,
+    RemoveContractDocumentView,
+    RemoveDocumentView,
     ReportDetailView,
+    ReportFrequencyUpdate,
+    ReportingView,
     ReportListView,
     ReportPrivateMedia,
     ReportSkipView,
     ReportUpdateView,
-    VendorDetailView,
-    VendorPrivateMediaView,
+    SendForApprovalView,
+    SkipPAFApprovalProcessView,
+    SubmitContractDocumentsView,
+    UpdateAssignApproversView,
+    UpdateLeadView,
+    UpdatePAFApproversView,
+    UpdateProjectTitleView,
+    UploadContractDocumentView,
+    UploadContractView,
+    UploadDocumentView,
     get_invoices_status_counts,
     get_project_status_counts,
+    partial_contracting_documents,
+    partial_get_invoice_detail_actions,
+    partial_get_invoice_status,
+    partial_get_invoice_status_table,
     partial_project_activities,
+    partial_project_lead,
+    partial_project_title,
+    partial_supporting_documents,
 )
 
 app_name = "projects"
@@ -43,6 +66,11 @@ urlpatterns = [
         "invoices/statuses/", get_invoices_status_counts, name="invoices_status_counts"
     ),
     path(
+        "all/bulk_invoice_status_update/",
+        BatchUpdateInvoiceStatusView.as_view(),
+        name="bulk_invoice_status_update",
+    ),
+    path(
         "<int:pk>/",
         include(
             [
@@ -52,7 +80,58 @@ urlpatterns = [
                     partial_project_activities,
                     name="partial-activities",
                 ),
+                path("partial/lead/", partial_project_lead, name="project_lead"),
+                path("partial/title/", partial_project_title, name="project_title"),
                 path("edit/", ProjectFormEditView.as_view(), name="edit"),
+                path("lead/update/", UpdateLeadView.as_view(), name="lead_update"),
+                path(
+                    "status/update/",
+                    ChangeProjectstatusView.as_view(),
+                    name="project_status_update",
+                ),
+                path(
+                    "title/update/",
+                    UpdateProjectTitleView.as_view(),
+                    name="project_title_update",
+                ),
+                path(
+                    "paf/skip/", SkipPAFApprovalProcessView.as_view(), name="paf_skip"
+                ),
+                path(
+                    "documents/submit/",
+                    SendForApprovalView.as_view(),
+                    name="submit_project_for_approval",
+                ),
+                path(
+                    "pafapprovers/assign/",
+                    UpdateAssignApproversView.as_view(),
+                    name="assign_pafapprovers",
+                ),
+                path(
+                    "pafapprovers/update/",
+                    UpdatePAFApproversView.as_view(),
+                    name="update_pafapprovers",
+                ),
+                path(
+                    "pafstatus/update/",
+                    ChangePAFStatusView.as_view(),
+                    name="update_pafstatus",
+                ),
+                path(
+                    "document/<int:category_pk>/upload/",
+                    UploadDocumentView.as_view(),
+                    name="supporting_doc_upload",
+                ),
+                path(
+                    "document/<int:document_pk>/remove/",
+                    RemoveDocumentView.as_view(),
+                    name="remove_supporting_document",
+                ),
+                path(
+                    "partial/documents/",
+                    partial_supporting_documents,
+                    name="supporting_documents",
+                ),
                 path(
                     "documents/<int:file_pk>",
                     ProjectPrivateMediaView.as_view(),
@@ -62,6 +141,26 @@ urlpatterns = [
                     "documents/<uuid:field_id>/<str:file_name>",
                     ProjectPrivateMediaView.as_view(),
                     name="document",
+                ),
+                path(
+                    "contract/upload/",
+                    UploadContractView.as_view(),
+                    name="contract_upload",
+                ),
+                path(
+                    "partial/contract/documents/",
+                    partial_contracting_documents,
+                    name="contract_documents",
+                ),
+                path(
+                    "contract/documents/<int:category_pk>/upload/",
+                    UploadContractDocumentView.as_view(),
+                    name="contract_doc_upload",
+                ),
+                path(
+                    "contract/documents/<int:document_pk>/remove/",
+                    RemoveContractDocumentView.as_view(),
+                    name="remove_contracting_document",
                 ),
                 path(
                     "category/<str:type>/<int:category_pk>/template/",
@@ -79,6 +178,16 @@ urlpatterns = [
                     name="contract_document",
                 ),
                 path(
+                    "contract/documents/submit/",
+                    SubmitContractDocumentsView.as_view(),
+                    name="contract_documents_submit",
+                ),
+                path(
+                    "contract/approve/",
+                    ApproveContractView.as_view(),
+                    name="contract_approve",
+                ),
+                path(
                     "download/<str:export_type>/",
                     ProjectDetailDownloadView.as_view(),
                     name="download",
@@ -90,17 +199,22 @@ urlpatterns = [
                     ProjectSOWDownloadView.as_view(),
                     name="download-sow",
                 ),
-                path("invoice/", CreateInvoiceView.as_view(), name="invoice"),
-                path("vendor/", CreateVendorView.as_view(), name="vendor"),
                 path(
-                    "vendor/<int:vendor_pk>/",
-                    VendorDetailView.as_view(),
-                    name="vendor-detail",
+                    "frequency/update/",
+                    ReportFrequencyUpdate.as_view(),
+                    name="report_frequency_update",
+                ),
+                path("invoice/", CreateInvoiceView.as_view(), name="invoice"),
+                path(
+                    "partial/invoice-status/",
+                    partial_get_invoice_status_table,
+                    name="partial-invoices-status",
                 ),
                 path(
-                    "vendor/<int:vendor_pk>/documents/<int:file_pk>/",
-                    VendorPrivateMediaView.as_view(),
-                    name="vendor-documents",
+                    "partial/rejected-invoice-status/",
+                    partial_get_invoice_status_table,
+                    {"rejected": True},
+                    name="partial-rejected-invoices-status",
                 ),
                 path(
                     "invoices/<int:invoice_pk>/",
@@ -111,9 +225,24 @@ urlpatterns = [
                                 "edit/", EditInvoiceView.as_view(), name="invoice-edit"
                             ),
                             path(
+                                "update/",
+                                ChangeInvoiceStatusView.as_view(),
+                                name="invoice-update",
+                            ),
+                            path(
                                 "delete/",
                                 DeleteInvoiceView.as_view(),
                                 name="invoice-delete",
+                            ),
+                            path(
+                                "partial/status/",
+                                partial_get_invoice_status,
+                                name="partial-invoice-status",
+                            ),
+                            path(
+                                "actions/",
+                                partial_get_invoice_detail_actions,
+                                name="partial-invoice-detail-actions",
                             ),
                             path(
                                 "documents/invoice/",
@@ -136,7 +265,8 @@ urlpatterns = [
         include(
             (
                 [
-                    path("", ReportListView.as_view(), name="all"),
+                    path("", ReportListView.as_view(), name="submitted"),
+                    path("all/", ReportingView.as_view(), name="all"),
                     path(
                         "<int:pk>/",
                         include(

@@ -1,11 +1,13 @@
-from django.conf import settings
+import json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import UserPassesTestMixin
-from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.safestring import mark_safe
@@ -16,25 +18,31 @@ from django.views.generic import (
     DetailView,
     FormView,
     UpdateView,
+    View,
 )
 from django_filters.views import FilterView
+from django_htmx.http import (
+    HttpResponseClientRefresh,
+)
 from django_tables2 import SingleTableMixin
 
 from hypha.apply.activity.messaging import MESSAGES, messenger
 from hypha.apply.activity.models import APPLICANT, COMMENT, Activity
+from hypha.apply.projects.templatetags.invoice_tools import (
+    display_invoice_status_for_user,
+)
 from hypha.apply.todo.options import (
     INVOICE_REQUIRED_CHANGES,
     INVOICE_WAITING_APPROVAL,
     PROJECT_WAITING_INVOICE,
 )
 from hypha.apply.todo.views import (
-    add_task_to_user_group,
+    add_task_to_user,
     remove_tasks_for_user,
-    remove_tasks_for_user_group,
     remove_tasks_of_related_obj,
 )
 from hypha.apply.users.decorators import staff_or_finance_required
-from hypha.apply.users.groups import STAFF_GROUP_NAME
+from hypha.apply.utils.pdfs import html_to_pdf, merge_pdf
 from hypha.apply.utils.storage import PrivateMediaView
 from hypha.apply.utils.views import (
     DelegateableListView,
@@ -51,16 +59,16 @@ from ..forms import (
     EditInvoiceForm,
 )
 from ..models.payment import (
-    APPROVED_BY_FINANCE,
     APPROVED_BY_STAFF,
     CHANGES_REQUESTED_BY_FINANCE,
     CHANGES_REQUESTED_BY_STAFF,
+    DECLINED,
     INVOICE_TRANISTION_TO_RESUBMITTED,
     Invoice,
 )
 from ..models.project import PROJECT_ACTION_MESSAGE_TAG, Project
 from ..service_utils import batch_update_invoices_status, handle_tasks_on_invoice_update
-from ..tables import AdminInvoiceListTable
+from ..tables import AdminInvoiceListTable, FinanceInvoiceTable
 
 
 @method_decorator(login_required, name="dispatch")
@@ -85,61 +93,103 @@ class InvoiceAccessMixin(UserPassesTestMixin):
 
 
 @method_decorator(staff_or_finance_required, name="dispatch")
-class ChangeInvoiceStatusView(DelegatedViewMixin, InvoiceAccessMixin, UpdateView):
+class ChangeInvoiceStatusView(InvoiceAccessMixin, View):
     form_class = ChangeInvoiceStatusForm
     context_name = "change_invoice_status"
     model = Invoice
+    template = "application_projects/modals/invoice_status_update.html"
 
-    def form_valid(self, form):
-        invoice = get_object_or_404(
-            Invoice, pk=self.kwargs["invoice_pk"]
-        )  # to get the old status
-        old_status = invoice.status
-        response = super().form_valid(form)
-        if form.cleaned_data["comment"]:
-            invoice_status_change = _(
-                "<p>Invoice status updated to: {status}.</p>"
-            ).format(status=self.object.get_status_display())
-            comment = f"<p>{self.object.comment}.</p>"
+    def dispatch(self, request, *args, **kwargs):
+        self.object: Invoice = get_object_or_404(Invoice, id=kwargs.get("invoice_pk"))
+        return super().dispatch(request, *args, **kwargs)
 
-            message = invoice_status_change + comment
+    def get_context_data(self, **kwargs):
+        if not (form := kwargs.get("form")):
+            form = self.form_class(instance=self.object, user=self.request.user)
 
-            Activity.objects.create(
-                user=self.request.user,
-                type=COMMENT,
-                source=self.object.project,
-                timestamp=timezone.now(),
-                message=message,
-                visibility=APPLICANT,
-                related_object=self.object,
+        form.name = self.context_name
+
+        extras = {
+            "form": form,
+            "form_id": f"{form.name}-{self.object.id}",
+            "invoice_status": display_invoice_status_for_user(
+                self.request.user, self.object
+            ),
+            "value": _("Update status"),
+            "object": self.object,
+        }
+
+        return {**kwargs, **extras}
+
+    def get(self, *args, **kwargs):
+        form_instance = self.form_class(instance=self.object, user=self.request.user)
+        form_instance.name = self.context_name
+
+        return render(self.request, self.template, self.get_context_data())
+
+    def post(self, *args, **kwargs):
+        # Don't process the post request if the user can't change the status
+        old_status = self.object.status
+        if not self.object.can_user_change_status(self.request.user):
+            return render(
+                self.request, self.template, self.get_context_data(), status=403
             )
 
-        if (
-            self.request.user.is_apply_staff and self.object.status == APPROVED_BY_STAFF
-        ) or (
-            settings.INVOICE_EXTENDED_WORKFLOW
-            and self.request.user.is_finance_level_1
-            and self.object.status == APPROVED_BY_FINANCE
-        ):
+        form = self.form_class(
+            self.request.POST, instance=self.object, user=self.request.user
+        )
+        if form.is_valid():
+            form.save()
+            if form.cleaned_data["comment"]:
+                invoice_status_change = _(
+                    "<p>Invoice status updated to: {status}.</p>"
+                ).format(status=self.object.get_status_display())
+                comment = f"<p>{self.object.comment}</p>"
+
+                message = invoice_status_change + comment
+
+                Activity.objects.create(
+                    user=self.request.user,
+                    type=COMMENT,
+                    source=self.object.project,
+                    timestamp=timezone.now(),
+                    message=message,
+                    visibility=APPLICANT,
+                    related_object=self.object,
+                )
+
+            if (
+                self.request.user.is_apply_staff
+                and self.object.status == APPROVED_BY_STAFF
+            ):
+                self.object.save()
+                messenger(
+                    MESSAGES.APPROVE_INVOICE,
+                    request=self.request,
+                    user=self.request.user,
+                    source=self.object.project,
+                    related=self.object,
+                )
+
             messenger(
-                MESSAGES.APPROVE_INVOICE,
+                MESSAGES.UPDATE_INVOICE_STATUS,
                 request=self.request,
                 user=self.request.user,
                 source=self.object.project,
                 related=self.object,
             )
 
-        messenger(
-            MESSAGES.UPDATE_INVOICE_STATUS,
-            request=self.request,
-            user=self.request.user,
-            source=self.object.project,
-            related=self.object,
+            handle_tasks_on_invoice_update(old_status=old_status, invoice=self.object)
+            htmx_headers = {"invoicesUpdated": None, "showMessage": "Invoice updated."}
+            if self.object.status == DECLINED:
+                htmx_headers.update({"rejectedInvoicesUpdated": None})
+            return HttpResponse(
+                status=204, headers={"HX-Trigger": json.dumps(htmx_headers)}
+            )
+
+        return render(
+            self.request, self.template, self.get_context_data(form=form), status=400
         )
-
-        handle_tasks_on_invoice_update(old_status=old_status, invoice=self.object)
-
-        return response
 
 
 class DeleteInvoiceView(DeleteView):
@@ -178,37 +228,18 @@ class DeleteInvoiceView(DeleteView):
 
 
 class InvoiceAdminView(InvoiceAccessMixin, DelegateableView, DetailView):
-    form_views = [ChangeInvoiceStatusView]
+    form_views = []
     template_name_suffix = "_admin_detail"
 
     def get_context_data(self, **kwargs):
         invoice = self.get_object()
         project = invoice.project
         deliverables = project.deliverables.all()
-        invoice_activities = Activity.actions.filter(
-            related_content_type__model="invoice", related_object_id=invoice.id
-        ).visible_to(self.request.user)
-        return super().get_context_data(
-            **kwargs,
-            deliverables=deliverables,
-            latest_activity=invoice_activities.first(),
-            activities=invoice_activities[1:],
-        )
+        return super().get_context_data(**kwargs, deliverables=deliverables)
 
 
 class InvoiceApplicantView(InvoiceAccessMixin, DelegateableView, DetailView):
     form_views = []
-
-    def get_context_data(self, **kwargs):
-        invoice = self.get_object()
-        invoice_activities = Activity.actions.filter(
-            related_content_type__model="invoice", related_object_id=invoice.id
-        ).visible_to(self.request.user)
-        return super().get_context_data(
-            **kwargs,
-            latest_activity=invoice_activities.first(),
-            activities=invoice_activities[1:],
-        )
 
 
 class InvoiceView(ViewDispatcher):
@@ -275,9 +306,9 @@ class CreateInvoiceView(CreateView):
             )
 
         # add Invoice waiting approval task for Staff group
-        add_task_to_user_group(
+        add_task_to_user(
             code=INVOICE_WAITING_APPROVAL,
-            user_group=Group.objects.filter(name=STAFF_GROUP_NAME),
+            user=self.object.project.lead,
             related_obj=self.object,
         )
 
@@ -374,9 +405,9 @@ class EditInvoiceView(InvoiceAccessMixin, UpdateView):
             )
 
             # add invoice waiting approval task for staff group
-            add_task_to_user_group(
+            add_task_to_user(
                 code=INVOICE_WAITING_APPROVAL,
-                user_group=Group.objects.filter(name=STAFF_GROUP_NAME),
+                user=self.object.project.lead,
                 related_obj=self.object,
             )
 
@@ -385,15 +416,15 @@ class EditInvoiceView(InvoiceAccessMixin, UpdateView):
             and old_status == CHANGES_REQUESTED_BY_FINANCE
         ):
             # remove invoice required changes task for staff group
-            remove_tasks_for_user_group(
+            remove_tasks_for_user(
                 code=INVOICE_REQUIRED_CHANGES,
-                user_group=Group.objects.filter(name=STAFF_GROUP_NAME),
+                user=self.object.project.lead,
                 related_obj=self.object,
             )
             # add invoice waiting approval task for staff group
-            add_task_to_user_group(
+            add_task_to_user(
                 code=INVOICE_WAITING_APPROVAL,
-                user_group=Group.objects.filter(name=STAFF_GROUP_NAME),
+                user=self.object.project.lead,
                 related_obj=self.object,
             )
 
@@ -416,12 +447,35 @@ class InvoicePrivateMedia(UserPassesTestMixin, PrivateMediaView):
         return super().dispatch(*args, **kwargs)
 
     def get_media(self, *args, **kwargs):
-        file_pk = kwargs.get("file_pk")
-        if not file_pk:
-            return self.invoice.document
+        # check if the request is for a supporting document
+        if file_pk := kwargs.get("file_pk"):
+            document = get_object_or_404(self.invoice.supporting_documents, pk=file_pk)
+            return document.document
 
-        document = get_object_or_404(self.invoice.supporting_documents, pk=file_pk)
-        return document.document
+        # if not, then it's for invoice document
+        if (
+            self.invoice.status == APPROVED_BY_STAFF
+            and self.invoice.document.file.name.endswith(".pdf")
+        ):
+            if activities := Activity.actions.filter(
+                related_content_type__model="invoice",
+                related_object_id=self.invoice.id,
+                message__icontains="Approved by",
+            ).visible_to(self.request.user):
+                approval_pdf_page = html_to_pdf(
+                    render_to_string(
+                        "application_projects/pdf_invoice_approved_page.html",
+                        context={
+                            "invoice": self.invoice,
+                            "generated_at": timezone.now(),
+                            "activities": activities,
+                        },
+                        request=self.request,
+                    )
+                )
+                return merge_pdf(self.invoice.document.file, approval_pdf_page)
+
+        return self.invoice.document
 
     def test_func(self):
         if self.request.user.is_apply_staff:
@@ -440,40 +494,51 @@ class InvoicePrivateMedia(UserPassesTestMixin, PrivateMediaView):
 class BatchUpdateInvoiceStatusView(DelegatedViewMixin, FormView):
     form_class = BatchUpdateInvoiceStatusForm
     context_name = "batch_invoice_status_form"
+    template_name = "application_projects/modals/batch_invoice_status_update.html"
 
-    def form_valid(self, form):
-        new_status = form.cleaned_data["invoice_action"]
-        invoices = form.cleaned_data["invoices"]
-        invoices_old_statuses = {invoice: invoice.status for invoice in invoices}
-        batch_update_invoices_status(
-            invoices=invoices,
-            user=self.request.user,
-            status=new_status,
+    def get(self, *args, **kwargs):
+        selected_ids = self.request.GET.getlist("selected_ids", "")
+        invoices = Invoice.objects.filter(id__in=selected_ids)
+        form = self.form_class(user=self.request.user)
+        return render(
+            self.request,
+            self.template_name,
+            context={"form": form, "invoices": invoices},
         )
 
-        # add activity feed for batch update invoice status
-        projects = Project.objects.filter(
-            id__in=[invoice.project.id for invoice in invoices]
-        )
-        messenger(
-            MESSAGES.BATCH_UPDATE_INVOICE_STATUS,
-            request=self.request,
-            user=self.request.user,
-            sources=projects,
-            related=invoices,
-        )
+    def post(self, *args, **kwargs):
+        form = self.form_class(self.request.POST, user=self.request.user)
+        if form.is_valid():
+            new_status = form.cleaned_data["invoice_action"]
+            invoices = form.cleaned_data["invoices"]
+            invoices_old_statuses = {invoice: invoice.status for invoice in invoices}
+            batch_update_invoices_status(
+                invoices=invoices,
+                user=self.request.user,
+                status=new_status,
+            )
 
-        # update tasks for selected invoices
-        for invoice, old_status in invoices_old_statuses.items():
-            handle_tasks_on_invoice_update(old_status, invoice)
-        return super().form_valid(form)
+            # add activity feed for batch update invoice status
+            projects = Project.objects.filter(
+                id__in=[invoice.project.id for invoice in invoices]
+            )
+            messenger(
+                MESSAGES.BATCH_UPDATE_INVOICE_STATUS,
+                request=self.request,
+                user=self.request.user,
+                sources=projects,
+                related=invoices,
+            )
 
-    def form_invalid(self, form):
+            # update tasks for selected invoices
+            for invoice, old_status in invoices_old_statuses.items():
+                handle_tasks_on_invoice_update(old_status, invoice)
+            return HttpResponseClientRefresh()
         messages.error(
             self.request,
             mark_safe(_("Sorry something went wrong") + form.errors.as_ul()),
         )
-        return super().form_invalid(form)
+        return HttpResponseClientRefresh()
 
 
 @method_decorator(staff_or_finance_required, name="dispatch")
@@ -485,3 +550,8 @@ class InvoiceListView(SingleTableMixin, FilterView, DelegateableListView):
     model = Invoice
     table_class = AdminInvoiceListTable
     template_name = "application_projects/invoice_list.html"
+
+    def get_table_class(self):
+        if self.request.user.is_finance:
+            return FinanceInvoiceTable
+        return super().get_table_class()

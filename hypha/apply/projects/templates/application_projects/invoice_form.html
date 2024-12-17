@@ -6,7 +6,7 @@
 
     {% adminbar %}
         {% slot back_link %}
-            <a class="simplified__projects-link" href="{{ project.get_absolute_url }}">
+            <a class="admin-bar__back-link" href="{{ project.get_absolute_url }}">
                 {% trans "View project page" %}
             </a>
         {% endslot %}
@@ -29,7 +29,7 @@
 
     {% include "forms/includes/form_errors.html" with form=form %}
 
-    <div class="wrapper wrapper--light-grey-bg wrapper--form wrapper--sidebar">
+    <div class="wrapper wrapper--default-bg wrapper--form wrapper--sidebar">
         <div class="wrapper--sidebar--inner">
             <form class="form" action="" method="post" enctype="multipart/form-data">
                 {% csrf_token %}

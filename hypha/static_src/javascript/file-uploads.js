@@ -1,48 +1,29 @@
-jQuery(function ($) {
-    "use strict";
-
-    // Initialize django-file-form
-    $("form")
-        .get()
-        .forEach(function (form) {
-            // Prevent initilising it multiple times and run it for forms
-            // that have a `form_id` field added by django-file-form.
-            if (
-                !form.initUploadFieldsDone &&
-                form.querySelector("[name=form_id]")
-            ) {
-                init(form);
-                form.initUploadFieldsDone = true;
-            }
-            if (
-                !form.initUploadFieldsDone &&
-                form.querySelector("[name=create_vendor_view-current_step]")
-            ) {
-                initWizard(form);
-                form.initUploadFieldsDone = true;
-            }
-        });
-
-    function init(form) {
-        if ($(".form__group--file").length) {
-            window.initUploadFields(form);
-
-            // Hide wrapper elements for hidden inputs added by django-file-form
-            $("input[type=hidden]").closest(".form__group").hide();
-        }
+document.addEventListener("DOMContentLoaded", function () {
+  // Initialize django-file-form
+  document.querySelectorAll("form").forEach(function (form) {
+    // Prevent initializing it multiple times and run it for forms
+    // that have a `form_id` field added by django-file-form.
+    if (!form.initUploadFieldsDone && form.querySelector("[name=form_id]")) {
+      init(form);
+      form.initUploadFieldsDone = true;
     }
+  });
 
-    // Initilise multi-step wizard forms
-    function initWizard(form) {
-        const step = form.querySelector(
-            "[name=create_vendor_view-current_step]"
-        ).value;
-        if (step === "documents") {
-            window.initUploadFields(form, {
-                prefix: "documents",
-            });
-            // Hide wrapper elements for hidden inputs added by django-file-form
-            $("input[type=hidden]").closest(".form__group").hide();
+  /**
+   * Initialize django-file-form for a form.
+   * @param {object} form The form to initialize.
+   */
+  function init(form) {
+    if (document.querySelectorAll(".form__group--file").length) {
+      window.initUploadFields(form);
+
+      // Hide wrapper elements for hidden inputs added by django-file-form
+      document.querySelectorAll("input[type=hidden]").forEach(function (input) {
+        var closestFormGroup = input.closest(".form__group");
+        if (closestFormGroup) {
+          closestFormGroup.hidden = true;
         }
+      });
     }
+  }
 });

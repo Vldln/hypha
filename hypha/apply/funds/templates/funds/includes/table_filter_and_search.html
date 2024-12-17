@@ -6,79 +6,66 @@
         {# Left #}
         <div class="actions-bar__inner actions-bar__inner--left">
             {% if heading %}
-                <h2 class="text-xl mb-2">{{ heading }}</h2>
+                <h2 class="mb-2 text-xl">{{ heading }}</h2>
             {% endif %}
 
-
-            {% if use_batch_actions %}
+            {% if invoice_batch_actions %}
                 <div class="actions-bar__inner actions-bar__inner--batch-actions">
                     <p class="actions-bar__total"><span class="js-total-actions">0</span> {% trans "Selected" %}</p>
-
-                    {% if not project_actions %}
-                        <button
-                            data-fancybox
-                            type="button"
-                            data-src="#batch-progress"
-                            class="button button--action js-batch-button js-batch-progress"
-                        >
-                            {% heroicon_mini "arrows-right-left" class="inline" aria_hidden=true %}
-                            {% trans "Status" %}
-                        </button>
-
-                        <button data-fancybox data-src="#batch-update-lead" class="button button--action js-batch-button" type="button">
-                            {% heroicon_micro "user-plus" class="inline" aria_hidden=true %}
-                            {% trans "Lead" %}
-                        </button>
-
-                        <button data-fancybox data-src="#batch-update-reviewers" class="button button--action js-batch-button" type="button">
-                            {% heroicon_micro "user-plus" class="inline" aria_hidden=true %}
-                            {% trans "Reviewers" %}
-                        </button>
-
-                        <button data-fancybox data-src="#batch-delete-submission" class="button button--action js-batch-button" type="button">
-                            {% heroicon_micro "trash" class="inline" aria_hidden=true %}
-                            {% trans "Delete" %}
-                        </button>
-
-                        {% if can_bulk_archive %}
-                            <button data-fancybox data-src="#batch-archive-submission" class="button button--action js-batch-button" type="button">
-                                {% heroicon_micro "archive-box-arrow-down" class="inline" aria_hidden=true %}
-                                {% trans "Archive" %}
-                            </button>
-                        {% endif %}
-                    {% elif invoice_actions %}
-                        <button data-fancybox data-src="#batch_update_invoice_status" class="button button--action js-batch-button js-batch-invoice-progress" type="button">
-                            {% heroicon_mini "arrows-right-left" class="inline" aria_hidden=true %}
-                            {% trans "Status" %}
-                        </button>
-                    {% endif %}
+                    <button class="button button--action js-batch-button js-batch-invoice-progress" href="{% url 'apply:projects:bulk_invoice_status_update' %}" hx-target="#htmx-modal">
+                        {% heroicon_mini "arrows-right-left" class="inline" aria_hidden=true %}
+                        {% trans "Status" %}
+                    </button>
                 </div>
             {% endif %}
+
         </div>
 
         {# Right #}
-        <div class="actions-bar__inner actions-bar__inner--right">
+        <div class="flex items-center gap-4">
             {% get_query 'archived' as archived_param %}
             {% if show_archive %}
                 {% if request.GET.archived == '1' %}
-                    <a href="{% modify_query archived='0' %}">{% trans "Hide archived" %}</a>
+                    <a
+                        class="px-3 py-1.5 flex items-center transition-colors rounded hover:bg-gray-100 hover:shadow-sm"
+                        href="{% modify_query archived='0' %}"
+                    >{% trans "Hide Archived" %}</a>
                 {% else %}
-                    <a href="{% modify_query archived='1' %}">{% trans "Show archived" %}</a>
+                    <a
+                        class="px-3 py-1.5 flex items-center transition-colors rounded hover:bg-gray-100 hover:shadow-sm"
+                        href="{% modify_query archived='1' %}"
+                    >{% trans "Show Archived" %}</a>
                 {% endif %}
             {% endif %}
-            {% if filter_classes != 'filters-open' %}
+            {% with request.get_full_path as path %}
+                {% if 'submission' in path and can_export %}
+                    <a
+                        class="px-2 py-1.5 flex items-center transition-colors border rounded hover:bg-gray-100 shadow-sm"
+                        aria-label="Submissions: Download as CSV"
+                        href="{{path}}{% if '?' in path %}&{%else%}?{% endif %}export=true"
+                        onclick="return confirm('{% blocktrans %}Are you sure you want to download the submissions as a csv file? This file may contain sensitive information, so please handle it carefully.{% endblocktrans %}');"
+                        role="button"
+                        data-tippy-content="Export as CSV"
+                    >
+
+                        {% heroicon_mini "arrow-down-tray" class="inline me-1" %}
+                        Export
+                    </a>
+                {% endif %}
+            {% endwith %}
+            {% if 'filters-open' not in filter_classes %}
                 <button class="button js-toggle-filters">
-                    {% heroicon_mini "adjustments-horizontal" class="inline me-1 text-dark-blue align-text-bottom" aria_hidden=true %}
+                    {% heroicon_mini "adjustments-horizontal" class="inline align-text-bottom me-1 text-dark-blue" aria_hidden=true %}
                     {% trans "Filters" %}
                 </button>
             {% endif %}
 
             <button class="button button--filters js-toggle-filters" id="show-filters-button">
-                {% heroicon_mini "adjustments-horizontal" class="inline me-1 text-dark-blue align-text-bottom" aria_hidden=true %}
+                {% heroicon_mini "adjustments-horizontal" class="inline align-text-bottom me-1 text-dark-blue" aria_hidden=true %}
                 {% trans "Filters" %}
             </button>
             {% if use_search|default:False %}
-                <form action="{{ search_action }}" method="get" role="search" class="form form--search-desktop">
+                <form action="{{ search_action }}" method="get" role="search" class="relative form">
                     <button class="button button--search" type="submit">
                         <span class="sr-only">{% trans "Search" %}</span>
                         {% heroicon_mini "magnifying-glass" size=20 class="text-fg-muted" aria_hidden=true %}
@@ -87,7 +74,14 @@
                         <input type="hidden" value="{{ archived_param }}" name="archived">
                     {% endif %}
                     {% trans "submissions" as submissions %}
-                    <input class="input input--search input--secondary" type="text" placeholder="{% trans 'Search' %} {{ search_placeholder|default:submissions }}" name="query"{% if search_term %} value="{{ search_term }}"{% endif %} aria-label="{% trans 'Search input' %}">
+                    <input
+                        class="rounded shadow-sm input input--search input--secondary md:w-48"
+                        type="text"
+                        placeholder="{% trans 'Search' %} {{ search_placeholder|default:submissions }}"
+                        name="query"
+                        {% if search_term %}value="{{ search_term }}"{% endif %}
+                        aria-label="{% trans 'Search input' %}"
+                    >
                 </form>
             {% endif %}
         </div>
@@ -111,16 +105,3 @@
         </ul>
     </form>
 </div>
-
-{% if use_batch_actions %}
-    {% include "funds/includes/batch_update_lead_form.html" %}
-    {% include "funds/includes/batch_update_reviewer_form.html" %}
-    {% include "funds/includes/batch_progress_form.html" %}
-    {% include "funds/includes/batch_delete_submission_form.html" %}
-    {% include "funds/includes/batch_archive_submission_form.html" %}
-    {% if project_actions %}
-        {% if invoice_actions %}
-            {% include "application_projects/includes/batch_invoice_status_update.html" %}
-        {% endif %}
-    {% endif %}
-{% endif %}

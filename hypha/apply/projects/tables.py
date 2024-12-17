@@ -2,10 +2,12 @@ import json
 import textwrap
 
 import django_tables2 as tables
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tables2.utils import A
+from heroicons.templatetags.heroicons import heroicon_outline
 
 from hypha.apply.funds.tables import LabeledCheckboxColumn
 
@@ -37,18 +39,16 @@ class BaseInvoiceTable(tables.Table):
             },
         },
     )
-    project = tables.Column(verbose_name=_("Project Name"))
     status = tables.Column(
         attrs={"td": {"data-actions": render_invoice_actions, "class": "js-actions"}},
     )
     requested_at = tables.DateColumn(verbose_name=_("Submitted"))
-
-    def render_project(self, value):
-        text = (textwrap.shorten(value.title, width=30, placeholder="..."),)
-        return text[0]
+    invoice_date = tables.DateColumn(verbose_name=_("Invoice date"))
 
 
 class InvoiceDashboardTable(BaseInvoiceTable):
+    project = tables.Column(verbose_name=_("Project Name"))
+
     class Meta:
         fields = [
             "requested_at",
@@ -61,8 +61,47 @@ class InvoiceDashboardTable(BaseInvoiceTable):
         template_name = "application_projects/tables/table.html"
         attrs = {"class": "invoices-table"}
 
+    def render_project(self, value):
+        text = (textwrap.shorten(value.title, width=30, placeholder="..."),)
+        return text[0]
+
+
+class FinanceInvoiceTable(BaseInvoiceTable):
+    vendor_name = tables.Column(verbose_name=_("Vendor Name"), empty_values=())
+    selected = LabeledCheckboxColumn(
+        accessor=A("pk"),
+        attrs={
+            "input": {"class": "js-batch-select"},
+            "th__input": {"class": "js-batch-select-all"},
+        },
+    )
+
+    class Meta:
+        fields = [
+            "selected",
+            "invoice_date",
+            "requested_at",
+            "vendor_name",
+            "invoice_number",
+            "invoice_amount",
+            "status",
+        ]
+        model = Invoice
+        orderable = True
+        sequence = fields
+        order_by = ["-requested_at", "invoice_date"]
+        template_name = "application_projects/tables/table.html"
+        attrs = {"class": "invoices-table"}
+        row_attrs = {
+            "data-record-id": lambda record: record.id,
+        }
+
+    def render_vendor_name(self, record):
+        return record.project.user
+
 
 class InvoiceListTable(BaseInvoiceTable):
+    project = tables.Column(verbose_name=_("Project Name"))
     fund = tables.Column(verbose_name=_("Fund"), accessor="project__submission__page")
     lead = tables.Column(verbose_name=_("Lead"), accessor="project__lead")
 
@@ -80,6 +119,44 @@ class InvoiceListTable(BaseInvoiceTable):
         order_by = ["-requested_at"]
         template_name = "application_projects/tables/table.html"
         attrs = {"class": "invoices-table"}
+
+    def render_project(self, value):
+        text = (textwrap.shorten(value.title, width=30, placeholder="..."),)
+        return text[0]
+
+
+class AdminInvoiceListTable(BaseInvoiceTable):
+    project = tables.Column(verbose_name=_("Project Name"))
+    selected = LabeledCheckboxColumn(
+        accessor=A("pk"),
+        attrs={
+            "input": {"class": "js-batch-select"},
+            "th__input": {"class": "js-batch-select-all"},
+        },
+    )
+
+    class Meta:
+        fields = [
+            "selected",
+            "invoice_number",
+            "invoice_date",
+            "requested_at",
+            "status",
+            "project",
+        ]
+        model = Invoice
+        orderable = True
+        sequence = fields
+        order_by = ["-requested_at"]
+        template_name = "application_projects/tables/table.html"
+        attrs = {"class": "invoices-table"}
+        row_attrs = {
+            "data-record-id": lambda record: record.id,
+        }
+
+    def render_project(self, value):
+        text = (textwrap.shorten(value.title, width=30, placeholder="..."),)
+        return text[0]
 
 
 class AdminInvoiceListTable(BaseInvoiceTable):
@@ -139,9 +216,7 @@ class BaseProjectsTable(tables.Table):
             return "Up to date"
 
         if record.report_config.has_very_late_reports():
-            display = (
-                '<svg class="icon"><use xlink:href="#exclamation-point"></use></svg>'
-            )
+            display = f"<span class='text-red-500 inline-block align-text-bottom me-1'>{heroicon_outline(name='exclamation-triangle', size=20)}</span>"
         else:
             display = ""
 
@@ -244,6 +319,51 @@ class ProjectsListTable(BaseProjectsTable):
 
     def order_end_date(self, qs, desc):
         return qs.by_end_date(desc), True
+
+
+class ReportingTable(tables.Table):
+    pk = tables.Column(
+        verbose_name=_("Project #"),
+    )
+    submission_id = tables.Column(
+        verbose_name=_("Submission #"),
+    )
+    title = tables.LinkColumn("funds:projects:detail", args=[tables.utils.A("pk")])
+    organization_name = tables.Column(
+        accessor="submission__organization_name", verbose_name="Organization name"
+    )
+    current_report_status = tables.Column(
+        attrs={"td": {"class": "status"}}, verbose_name="Status"
+    )
+
+    def render_current_report_status(self, value):
+        return format_html("<span>{}</span>", value)
+
+    current_report_submitted_date = tables.Column(
+        verbose_name="Submitted date", accessor="current_report_submitted_date__date"
+    )
+    current_report_due_date = tables.Column(
+        verbose_name="Due Date", accessor="report_config__current_report__end_date"
+    )
+    current_report_last_notified_date = tables.Column(
+        verbose_name="Last Notified",
+        accessor="report_config__current_report__notified__date",
+    )
+
+    class Meta:
+        fields = [
+            "pk",
+            "title",
+            "submission_id",
+            "organization_name",
+            "current_report_due_date",
+            "current_report_status",
+            "current_report_submitted_date",
+            "current_report_last_notified_date",
+        ]
+        model = Project
+        orderable = True
+        attrs = {"class": "reporting-table"}
 
 
 class ReportListTable(tables.Table):

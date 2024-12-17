@@ -2,10 +2,14 @@ import json
 
 from django import template
 from django.conf import settings
+from django.template.defaultfilters import stringfilter
+from django.utils.translation import gettext_lazy as _
 
 from hypha.apply.determinations.models import Determination
+from hypha.apply.funds.models.submissions import ApplicationSubmission
 from hypha.apply.projects.models import Contract
 from hypha.apply.review.models import Review
+from hypha.apply.users.models import User
 
 from ..models import ALL, APPLICANT_PARTNERS, REVIEWER, TEAM
 
@@ -13,7 +17,7 @@ register = template.Library()
 
 
 @register.filter
-def display_author(activity, user) -> str:
+def display_activity_author(activity, user) -> str:
     """Creates a formatted author string based on the activity and viewer role.
 
     Args:
@@ -27,15 +31,25 @@ def display_author(activity, user) -> str:
         A string with the formatted author depending on the user role (ie. a
         comment from staff viewed by an applicant will return the org name).
     """
-    if (user.is_applicant or user.is_partner) and (
-        activity.user.is_apply_staff
-        or activity.user.is_finance
-        or activity.user.is_contracting
+    if (
+        settings.HIDE_STAFF_IDENTITY
+        and not user.is_org_faculty
+        and activity.user.is_org_faculty
     ):
         return settings.ORG_LONG_NAME
+
     if isinstance(activity.related_object, Review) and activity.source.user == user:
-        return "Reviewer"
-    return activity.user.get_full_name_with_group()
+        return _("Reviewer")
+
+    if (
+        settings.HIDE_IDENTITY_FROM_REVIEWERS
+        and isinstance(activity.source, ApplicationSubmission)
+        and activity.user == activity.source.user
+        and user in activity.source.reviewers.all()
+    ):
+        return _("Applicant")
+
+    return activity.user.get_display_name()
 
 
 @register.filter
@@ -120,19 +134,45 @@ def visibility_display(visibility: str, user) -> str:
     return visibility
 
 
+@register.simple_tag(takes_context=True)
+def display_name_for_email(context: dict, user: User) -> str:
+    """Gets a user's display name when being used in an email
+    Primarily used to hide staff identities
+    Args:
+        user: the [`User`][hypha.apply.users.models.User] to get the display name for
+        context: the context provided by the template
+    Returns:
+        str: the display name to be used to address the user in question
+    """
+    recipient = context["recipient"]
+
+    if (
+        settings.HIDE_STAFF_IDENTITY
+        and user.is_org_faculty
+        and not recipient.is_org_faculty
+    ):
+        return settings.ORG_LONG_NAME
+    else:
+        return str(user)
+
+
 @register.filter
 def source_type(value) -> str:
     """Formats source type
-
     For a given source type containing "submission", this will be converted
     to "Submission" (ie. "application submission" -> "Submission").
-
     Args:
         value: the source type to be formatted
-
     Returns:
         A source type string with a capitalized first letter
     """
     if value and "submission" in value:
         return "Submission"
     return str(value).capitalize()
+
+
+@register.filter(is_safe=True)
+@stringfilter
+def lowerfirst(value):
+    """Lowercase the first character of the value."""
+    return value and value[0].lower() + value[1:]

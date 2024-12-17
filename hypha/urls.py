@@ -1,3 +1,4 @@
+import djp
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
@@ -13,12 +14,15 @@ from wagtail.images.views.serve import ServeView
 from hypha.apply.api import urls as api_urls
 from hypha.apply.dashboard import urls as dashboard_urls
 from hypha.apply.users.urls import urlpatterns as user_urls
-from hypha.apply.users.views import become
+from hypha.apply.users.views import become, oauth_complete
 from hypha.apply.utils.views import custom_wagtail_page_delete
+from hypha.home.views import home
 
 urlpatterns = [
+    path("", home, name="home"),
     path("apply/", include("hypha.apply.funds.urls", "apply")),
     path("activity/", include("hypha.apply.activity.urls", "activity")),
+    path("todo/", include("hypha.apply.todo.urls", "todo")),
     path("api/", include(api_urls)),
     path("django-admin/", admin.site.urls),
     path(
@@ -34,7 +38,10 @@ urlpatterns = [
     path("dashboard/", include(dashboard_urls)),
     path("sitemap.xml", sitemap),
     path("upload/", include(django_file_form_urls)),
-    path("", include("social_django.urls", namespace="social")),
+    # path("complete/<str:backend>/", oauth_complete, name=f"{settings.SOCIAL_AUTH_URL_NAMESPACE}:complete"),
+    path(
+        "", include("social_django.urls", namespace=settings.SOCIAL_AUTH_URL_NAMESPACE)
+    ),
     path("", include(tf_urls, "two_factor")),
     path("", include((user_urls, "users"))),
     path("tinymce/", include("tinymce.urls")),
@@ -77,6 +84,15 @@ if settings.DEBUG:
         path("test500/", dj_default_views.server_error),
     ]
 
+# Override the social auth `<SOCIAL_NAMESPACE>:complete` to allow for extending the OAuth session
+urlpatterns = [
+    path(
+        "complete/<str:backend>/",
+        oauth_complete,
+        name=f"{settings.SOCIAL_AUTH_URL_NAMESPACE}:complete",
+    )
+] + urlpatterns
+
 urlpatterns += [
     re_path(
         r"^images/([^/]*)/(\d*)/([^/]*)/[^/]*$",
@@ -89,6 +105,8 @@ urlpatterns += [
     path("", include(wagtail_urls)),
 ]
 
+# Load urls from any djp plugins.
+urlpatterns += djp.urlpatterns()
 
 if settings.DEBUG:
     import debug_toolbar

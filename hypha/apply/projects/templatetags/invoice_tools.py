@@ -2,7 +2,6 @@ import decimal
 from datetime import timedelta
 
 from django import template
-from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from hypha.apply.activity.models import Activity
@@ -11,11 +10,11 @@ from hypha.apply.projects.constants import (
     INVOICE_STATUS_BG_COLORS,
     INVOICE_STATUS_FG_COLORS,
 )
+from hypha.apply.projects.models.payment import PAID
 from hypha.apply.projects.models.project import (
     CLOSING,
     COMPLETE,
     INVOICING_AND_REPORTING,
-    ProjectSettings,
 )
 from hypha.apply.projects.utils import (
     get_invoice_public_status,
@@ -28,6 +27,13 @@ register = template.Library()
 @register.simple_tag
 def can_change_status(invoice, user):
     return invoice.can_user_change_status(user)
+
+
+@register.simple_tag
+def can_show_paid_date(invoice):
+    if invoice.status == PAID and invoice.paid_date:
+        return True
+    return False
 
 
 @register.simple_tag
@@ -78,12 +84,6 @@ def user_can_add_invoices(project, user):
 
 
 @register.simple_tag
-def is_vendor_setup(request):
-    project_settings = ProjectSettings.for_request(request)
-    return project_settings.vendor_setup_required
-
-
-@register.simple_tag
 def get_invoice_form(invoice, user):
     from hypha.apply.projects.views.payment import ChangeInvoiceStatusForm
 
@@ -109,10 +109,6 @@ def extract_status(activity, user):
         if " by " not in str(invoice_status) and not user.is_applicant:
             if activity.user.is_apply_staff:
                 user_role = "staff"
-            elif (
-                activity.user.is_finance_level_2 and settings.INVOICE_EXTENDED_WORKFLOW
-            ):
-                user_role = "finance2"
             elif activity.user.is_finance:
                 user_role = "finance"
             else:

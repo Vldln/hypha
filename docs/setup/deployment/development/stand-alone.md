@@ -196,6 +196,7 @@ There are two ways to about it, you can either load demo data from  `/public/san
     
     ```shell
     python3 manage.py migrate
+    python3 manage.py sync_roles
     ```
 
 === "From Scratch"
@@ -209,6 +210,7 @@ There are two ways to about it, you can either load demo data from  `/public/san
 
     ```text
     python3 manage.py migrate
+    python3 manage.py sync_roles
     ```
 
 !!! tip "Tips"
@@ -273,7 +275,13 @@ Activate your virtual environment and install dependencies:
 
 ```shell
 source venv/bin/activate
-python3 -m pip install -r requirements-dev.txt
+python3 -m pip install --no-deps -r requirements/dev.txt
+```
+
+If utilizing application machine translations, install the required dependencies:
+
+```shell
+python3 -m pip install -r requirements/translate.txt
 ```
 
 Run:
@@ -287,16 +295,6 @@ Open http://localhost:9100/ to preview the documentation site.
 !!! tip
     You can use `make serve` command to run Django Development Server, watch and compile frontend changes and preview docs all at once.
 
-
-## Coding Style
-
-Hypha's coding style is enforced by black, ruff and prettier and comes pre-configured with prettier. 
-
-Install pre-commit to auto-format the code before each commit:
-
-```shell
-pre-commit install
-```
 
 ## Running tests
 

@@ -5,9 +5,10 @@ from django.views.generic import RedirectView
 from hypha.apply.projects import urls as projects_urls
 
 from .views import (
-    AwaitingReviewSubmissionsListView,
-    ExportSubmissionsByRound,
+    CreateProjectView,
     GroupingApplicationsListView,
+    ProgressSubmissionView,
+    ReminderCreateView,
     ReminderDeleteView,
     ReviewerLeaderboard,
     ReviewerLeaderboardDetail,
@@ -17,30 +18,36 @@ from .views import (
     StaffAssignments,
     SubmissionDeleteView,
     SubmissionDetailPDFView,
-    SubmissionDetailSimplifiedView,
     SubmissionDetailView,
     SubmissionEditView,
-    SubmissionListView,
     SubmissionPrivateMediaView,
     SubmissionResultView,
-    SubmissionsByRound,
-    SubmissionsByStatus,
     SubmissionSealedView,
-    SubmissionStaffFlaggedView,
-    SubmissionUserFlaggedView,
+    TranslateSubmissionView,
+    UpdateLeadView,
+    UpdateMetaTermsView,
+    UpdatePartnersView,
+    UpdateReviewersView,
+    htmx_archive_unarchive_submission,
+    reminder_list,
     submission_success,
 )
-from .views_beta import (
+from .views_all import (
     bulk_archive_submissions,
     bulk_delete_submissions,
     bulk_update_submissions_status,
-    submission_all_beta,
+    submissions_all,
 )
 from .views_partials import (
     get_applications_status_counts,
+    partial_meta_terms_card,
     partial_reviews_card,
     partial_reviews_decisions,
+    partial_screening_card,
     partial_submission_activities,
+    partial_submission_answers,
+    partial_submission_lead,
+    partial_translate_answers,
     sub_menu_bulk_update_lead,
     sub_menu_bulk_update_reviewers,
     sub_menu_category_options,
@@ -82,71 +89,55 @@ submission_urls = (
             name="overview",
         ),
         path("success/<int:pk>/", submission_success, name="success"),
-        path("all/", SubmissionListView.as_view(), name="list"),
+        path("all/", submissions_all, name="list"),
         path(
             "statuses/",
             get_applications_status_counts,
             name="applications_status_counts",
         ),
-        path("all-alt/", submission_all_beta, name="list-alt"),
-        path("all-alt/bulk_archive/", bulk_archive_submissions, name="bulk-archive"),
-        path("all-alt/bulk_delete/", bulk_delete_submissions, name="bulk-delete"),
+        path("all/bulk_archive/", bulk_archive_submissions, name="bulk-archive"),
+        path("all/bulk_delete/", bulk_delete_submissions, name="bulk-delete"),
         path(
-            "all-alt/bulk_update_status/",
+            "all/bulk_update_status/",
             bulk_update_submissions_status,
             name="bulk-update-status",
         ),
-        path("all-alt/submenu/funds/", sub_menu_funds, name="submenu-funds"),
-        path("all-alt/submenu/leads/", sub_menu_leads, name="submenu-leads"),
-        path("all-alt/submenu/rounds/", sub_menu_rounds, name="submenu-rounds"),
+        path("all/submenu/funds/", sub_menu_funds, name="submenu-funds"),
+        path("all/submenu/leads/", sub_menu_leads, name="submenu-leads"),
+        path("all/submenu/rounds/", sub_menu_rounds, name="submenu-rounds"),
+        path("all/submenu/reviewers/", sub_menu_reviewers, name="submenu-reviewers"),
         path(
-            "all-alt/submenu/reviewers/", sub_menu_reviewers, name="submenu-reviewers"
-        ),
-        path(
-            "all-alt/submenu/meta-terms/",
+            "all/submenu/meta-terms/",
             sub_menu_meta_terms,
             name="submenu-meta-terms",
         ),
         path(
-            "all-alt/submenu/bulk-update-status/",
+            "all/submenu/bulk-update-status/",
             sub_menu_update_status,
             name="submenu-update-status",
         ),
         path(
-            "all-alt/submenu/bulk-update-lead/",
+            "all/submenu/bulk-update-lead/",
             sub_menu_bulk_update_lead,
             name="submenu-bulk-update-lead",
         ),
         path(
-            "all-alt/submenu/bulk-update-reviewers/",
+            "all/submenu/bulk-update-reviewers/",
             sub_menu_bulk_update_reviewers,
             name="submenu-bulk-update-reviewers",
         ),
         path(
-            "all-alt/submenu/category-options/",
+            "all/submenu/category-options/",
             sub_menu_category_options,
             name="submenu-category-options",
         ),
         path(
-            "all-alt/partials/review_decisions/",
+            "all/partials/review_decisions/",
             partial_reviews_decisions,
             name="partial-reviews-decisions",
         ),
         path("summary/", GroupingApplicationsListView.as_view(), name="summary"),
         path("result/", SubmissionResultView.as_view(), name="result"),
-        path(
-            "flagged/",
-            include(
-                [
-                    path("", SubmissionUserFlaggedView.as_view(), name="flagged"),
-                    path(
-                        "staff/",
-                        SubmissionStaffFlaggedView.as_view(),
-                        name="staff_flagged",
-                    ),
-                ]
-            ),
-        ),
         path(
             "reviews/",
             include(
@@ -161,11 +152,6 @@ submission_urls = (
                     ),
                 ]
             ),
-        ),
-        path(
-            "awaiting_review/",
-            AwaitingReviewSubmissionsListView.as_view(),
-            name="awaiting_review",
         ),
         path(
             "assignments/",
@@ -183,22 +169,82 @@ submission_urls = (
                 [
                     path("", SubmissionDetailView.as_view(), name="detail"),
                     path(
+                        "partial/lead/",
+                        partial_submission_lead,
+                        name="partial-get-lead",
+                    ),
+                    path(
                         "partial/activities/",
                         partial_submission_activities,
                         name="partial-activities",
+                    ),
+                    path("lead/update/", UpdateLeadView.as_view(), name="lead_update"),
+                    path("archive/", htmx_archive_unarchive_submission, name="archive"),
+                    path(
+                        "partial/screening-card/",
+                        partial_screening_card,
+                        name="partial-screening-card",
+                    ),
+                    path(
+                        "partial/meta-terms-card/",
+                        partial_meta_terms_card,
+                        name="partial-meta-terms-card",
+                    ),
+                    path(
+                        "partial/translate/answers",
+                        partial_translate_answers,
+                        name="partial-translate-answers",
+                    ),
+                    path(
+                        "project/create/",
+                        CreateProjectView.as_view(),
+                        name="create_project",
+                    ),
+                    path(
+                        "partial/reminder-card/",
+                        reminder_list,
+                        name="partial-reminder-card",
+                    ),
+                    path(
+                        "reminder/create/",
+                        ReminderCreateView.as_view(),
+                        name="create_reminder",
+                    ),
+                    path(
+                        "translate/",
+                        TranslateSubmissionView.as_view(),
+                        name="translate",
+                    ),
+                    path(
+                        "progress/", ProgressSubmissionView.as_view(), name="progress"
+                    ),
+                    path(
+                        "reviewers/update/",
+                        UpdateReviewersView.as_view(),
+                        name="reviewers_update",
+                    ),
+                    path(
+                        "partners/update/",
+                        UpdatePartnersView.as_view(),
+                        name="partners_update",
+                    ),
+                    path(
+                        "metaterms/update/",
+                        UpdateMetaTermsView.as_view(),
+                        name="metaterms_update",
                     ),
                     path(
                         "partial/reviews-card/",
                         partial_reviews_card,
                         name="partial-reviews-card",
                     ),
+                    path(
+                        "partial/answers/",
+                        partial_submission_answers,
+                        name="partial-answers",
+                    ),
                     path("edit/", SubmissionEditView.as_view(), name="edit"),
                     path("sealed/", SubmissionSealedView.as_view(), name="sealed"),
-                    path(
-                        "simplified/",
-                        SubmissionDetailSimplifiedView.as_view(),
-                        name="simplified",
-                    ),
                     path(
                         "download/", SubmissionDetailPDFView.as_view(), name="download"
                     ),
@@ -225,7 +271,6 @@ submission_urls = (
             "", include("hypha.apply.determinations.urls", namespace="determinations")
         ),
         path("", include("hypha.apply.flags.urls", namespace="flags")),
-        path("<slug:status>/", SubmissionsByStatus.as_view(), name="status"),
     ],
     "submissions",
 )
@@ -233,8 +278,6 @@ submission_urls = (
 rounds_urls = (
     [
         path("", RoundListView.as_view(), name="list"),
-        path("<int:pk>/", SubmissionsByRound.as_view(), name="detail"),
-        path("export/<int:pk>/", ExportSubmissionsByRound.as_view(), name="export"),
     ],
     "rounds",
 )

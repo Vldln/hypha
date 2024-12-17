@@ -1,8 +1,13 @@
-import io
 import os
+from io import BytesIO
 from itertools import cycle
 
 from bs4 import BeautifulSoup, NavigableString
+from django.core.files import File
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.utils import timezone
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib import pagesizes
 from reportlab.lib.colors import Color, white
 from reportlab.lib.styles import ParagraphStyle as PS
@@ -23,6 +28,9 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from xhtml2pdf import pisa
+
+from hypha.apply.utils.models import PDFPageSettings
 
 STYLES = {
     "Question": PS(
@@ -164,7 +172,7 @@ class ReportDocTemplate(BaseDocTemplate):
 
 def make_pdf(title, sections, pagesize):
     prepare_fonts()
-    buffer = io.BytesIO()
+    buffer = BytesIO()
     page_width, page_height = getattr(pagesizes, pagesize)
 
     doc = ReportDocTemplate(
@@ -448,15 +456,76 @@ def draw_submission_content(content):
     return paragraphs
 
 
-def draw_project_content(content):
-    prepare_fonts()
-    paragraphs = []
-    for section in BeautifulSoup(content, "html5lib").find_all(
-        class_="simplified__wrapper"
-    ):
-        flowables = handle_block(
-            section, custom_style={"Heading3": "Question", "Heading5": "QuestionSmall"}
-        )
-        paragraphs.extend(flowables)
+def html_to_pdf(html_body: str) -> BytesIO:
+    """Convert HTML to PDF.
 
-    return paragraphs
+    Args:
+        html_body: The body of the html as string
+
+    Returns:
+        BytesIO: PDF file
+    """
+    packet = BytesIO()
+    pisa.CreatePDF(html_body, dest=packet, raise_exception=True, encoding="utf-8")
+    packet.seek(0)
+    return packet
+
+
+def render_as_pdf(
+    template_name: str, filename: str, context: dict, request=None
+) -> HttpResponse:
+    """Convert HTML template to PDF file and return as a downloadable file.
+
+    Args:
+        template_name: Django template name to render
+        filename: Name of the output PDF file
+        context: Context dictionary for rendering template
+        request: Request object, defaults to None
+
+    Returns:
+        HttpResponse: PDF file as downloadable response
+
+    Example:
+        response = render_as_pdf(
+            template_name='my_template.html',
+            filename='my_pdf.pdf',
+            context={'title': 'My PDF'},
+            request=request
+        )
+    """
+    if "pagesize" not in context:
+        pdf_page_settings = PDFPageSettings.load(request_or_site=request)
+        context["pagesize"] = pdf_page_settings.download_page_size
+
+    context.setdefault("export_date", timezone.now())
+    context.setdefault("export_user", request.user if request else None)
+
+    html = render_to_string(
+        template_name=template_name, context=context, request=request
+    )
+    pdf = html_to_pdf(html)
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f"attachment; filename={filename}"
+    response.write(pdf.read())
+    return response
+
+
+def merge_pdf(origin_pdf: BytesIO, input_pdf: BytesIO) -> File:
+    """Given two PDFs, merge them together.
+
+    Args:
+        origin_pdf: a file-like object containing a PDF
+        input_pdf: a file-like object containing a PDF
+
+    Returns:
+        Return a File object containing the merged PDF and with the same name as the
+        original PDF.
+    """
+    merger = PdfWriter(clone_from=BytesIO(origin_pdf.read()))
+    merger.append(PdfReader(input_pdf))
+
+    output_pdf = BytesIO()
+    merger.write(output_pdf)
+    output_pdf.seek(0)
+    return File(output_pdf, name=origin_pdf.name)

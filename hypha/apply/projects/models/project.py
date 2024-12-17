@@ -1,5 +1,4 @@
 import decimal
-import json
 import logging
 
 from django import forms
@@ -10,7 +9,18 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Count, F, Max, OuterRef, Subquery, Sum, Value
+from django.db.models import (
+    Case,
+    Count,
+    F,
+    Max,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Cast, Coalesce
 from django.db.models.signals import post_delete
 from django.dispatch.dispatcher import receiver
@@ -24,14 +34,14 @@ from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
 from wagtail.fields import StreamField
 from wagtail.models import Orderable
 
-from addressfield.fields import ADDRESS_FIELDS_ORDER
 from hypha.apply.funds.models.mixins import AccessFormData
 from hypha.apply.stream_forms.files import StreamFieldDataEncoder
 from hypha.apply.stream_forms.models import BaseStreamForm
+from hypha.apply.users.roles import ROLES_ORG_FACULTY
 from hypha.apply.utils.storage import PrivateStorage
 
+from ..admin_forms import ContractDocumentCategoryAdminForm
 from ..blocks import ProjectFormCustomFormFieldsBlock
-from .vendor import Vendor
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +112,9 @@ class ProjectQuerySet(models.QuerySet):
                 CLOSING,
             )
         )
+
+    def invoicing_and_reporting(self):
+        return self.filter(status=INVOICING_AND_REPORTING)
 
     def complete(self):
         return self.filter(status=COMPLETE)
@@ -180,6 +193,49 @@ class ProjectQuerySet(models.QuerySet):
             )
         )
 
+    def for_reporting_table(self):
+        today = timezone.now().date()
+        Report = apps.get_model("application_projects", "Report")
+        return self.invoicing_and_reporting().annotate(
+            current_report_submitted_date=Subquery(
+                Report.objects.filter(
+                    project=OuterRef("pk"), end_date__gt=today, current__isnull=False
+                )
+                .order_by("end_date")
+                .values("submitted")[:1],
+                output_field=models.DateField(),
+            ),
+            current_report_status=Coalesce(
+                Subquery(
+                    Report.objects.filter(
+                        project=OuterRef("pk"),
+                    )
+                    .filter(
+                        Q(
+                            Q(end_date__gt=today),
+                            Q(current__isnull=False) | Q(draft__isnull=False),
+                        )
+                        | Q(
+                            end_date__lt=today,
+                            current__isnull=True,
+                            draft__isnull=False,
+                        )
+                    )
+                    .order_by("end_date")
+                    .annotate(
+                        report_status=Case(
+                            When(draft__isnull=False, then=Value("In progress")),
+                            When(current__isnull=False, then=Value("Submitted")),
+                            default=Value("Not started"),
+                        )
+                    )
+                    .values("report_status")[:1],
+                    output_field=models.CharField(),
+                ),
+                Value("Not started"),
+            ),
+        )
+
 
 class Project(BaseStreamForm, AccessFormData, models.Model):
     lead = models.ForeignKey(
@@ -199,13 +255,6 @@ class Project(BaseStreamForm, AccessFormData, models.Model):
     )
 
     title = models.TextField()
-    vendor = models.ForeignKey(
-        "application_projects.Vendor",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="projects",
-    )
     value = models.DecimalField(
         default=0,
         max_digits=20,
@@ -265,16 +314,7 @@ class Project(BaseStreamForm, AccessFormData, models.Model):
         return self.get_status_display()
 
     def get_address_display(self):
-        try:
-            address = json.loads(self.vendor.address)
-        except (json.JSONDecodeError, AttributeError):
-            return ""
-        else:
-            return ", ".join(
-                address.get(field)
-                for field in ADDRESS_FIELDS_ORDER
-                if address.get(field)
-            )
+        return ""  # todo: need to figure out
 
     @classmethod
     def create_from_submission(cls, submission, lead=None):
@@ -296,19 +336,10 @@ class Project(BaseStreamForm, AccessFormData, models.Model):
         if hasattr(submission, "project"):
             return submission.project
 
-        # See if there is a form field named "legal name", if not use user name.
-        legal_name = (
-            submission.get_answer_from_label("legal name") or submission.user.full_name
-        )
-        vendor, _ = Vendor.objects.get_or_create(user=submission.user)
-        vendor.name = legal_name
-        vendor.address = submission.form_data.get("address", "")
-        vendor.save()
         return Project.objects.create(
             submission=submission,
             user=submission.user,
             title=submission.title,
-            vendor=vendor,
             lead=lead if lead else None,
             value=submission.form_data.get("value", 0),
         )
@@ -501,7 +532,7 @@ class PAFReviewersRole(Orderable, ClusterableModel):
         Group,
         verbose_name=_("user groups"),
         help_text=_(
-            "Only selected group's users will be listed for this PAFReviewerRole"
+            "Only selected group's users will be listed for this ProjectFormReviewerRole"
         ),
         related_name="paf_reviewers_roles",
     )
@@ -516,6 +547,26 @@ class PAFReviewersRole(Orderable, ClusterableModel):
         return str(self.label)
 
 
+class ProjectReminderFrequency(Orderable, ClusterableModel):
+    reminder_days = models.IntegerField()
+    page = ParentalKey("ProjectSettings", related_name="reminder_frequencies")
+
+    class FrequencyRelation(models.TextChoices):
+        BEFORE = "BE", _("Before")
+        AFTER = "AF", _("After")
+
+    relation = models.CharField(
+        max_length=2,
+        choices=FrequencyRelation.choices,
+        default=FrequencyRelation.BEFORE,
+    )
+
+    panels = [
+        FieldPanel("reminder_days", heading=_("Number of days")),
+        FieldPanel("relation", heading=_("Relation to report due date")),
+    ]
+
+
 @register_setting
 class ProjectSettings(BaseSiteSetting, ClusterableModel):
     contracting_gp_email = models.TextField(
@@ -523,24 +574,37 @@ class ProjectSettings(BaseSiteSetting, ClusterableModel):
     )
     finance_gp_email = models.TextField("Finance Group Email", null=True, blank=True)
     staff_gp_email = models.TextField("Staff Group Email", null=True, blank=True)
-    vendor_setup_required = models.BooleanField(default=True)
     paf_approval_sequential = models.BooleanField(
-        default=True, help_text="Uncheck it to approve PAF parallely"
+        default=True, help_text="Uncheck it to approve project parallely"
     )
 
     panels = [
         FieldPanel("staff_gp_email"),
         FieldPanel("contracting_gp_email"),
         FieldPanel("finance_gp_email"),
-        FieldPanel("vendor_setup_required"),
         MultiFieldPanel(
             [
                 FieldPanel(
-                    "paf_approval_sequential", heading="Approve PAF Sequentially"
+                    "paf_approval_sequential", heading="Approve Project Sequentially"
                 ),
-                InlinePanel("paf_reviewers_roles", label=_("PAF Reviewers Roles")),
+                InlinePanel(
+                    "paf_reviewers_roles", label=_("Project Form Reviewers Roles")
+                ),
             ],
-            heading=_("PAF Reviewers Roles"),
+            heading=_("Project Reviewers Roles"),
+            help_text=_(
+                "Reviewer Roles are needed to move projects to 'Internal Approval' stage. "
+                "Delete all roles to skip internal approval process and "
+                "to move all internal approval projects back to the 'Draft' stage with all approvals removed."
+            ),
+        ),
+        InlinePanel(
+            "reminder_frequencies",
+            label=_("Report reminder frequency"),
+            heading=_("Report reminder frequency"),
+            help_text=_(
+                "Set up a cron job to run `notify_report_due.py`. The script will use these reminder settings."
+            ),
         ),
     ]
 
@@ -580,7 +644,9 @@ class PAFApprovals(models.Model):
 
 class ContractQuerySet(models.QuerySet):
     def approved(self):
-        return self.filter(signed_by_applicant=True, approver__isnull=False)
+        return self.filter(
+            Q(signed_by_applicant=True) | Q(signed_and_approved=True)
+        ).filter(approver__isnull=False)
 
 
 class Contract(models.Model):
@@ -595,6 +661,8 @@ class Contract(models.Model):
     )
 
     file = models.FileField(upload_to=contract_path, storage=PrivateStorage())
+
+    signed_and_approved = models.BooleanField("Signed and approved", default=False)
 
     signed_by_applicant = models.BooleanField("Counter Signed?", default=False)
     uploaded_by_contractor_at = models.DateTimeField(null=True)
@@ -643,19 +711,6 @@ class PacketFile(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
-    def get_remove_form(self):
-        """
-        Get an instantiated RemoveDocumentForm with this class as `instance`.
-
-        This allows us to build instances of the RemoveDocumentForm for each
-        instance of PacketFile in the supporting documents template.  The
-        standard Delegated View flow makes it difficult to create these forms
-        in the view or template.
-        """
-        from ..forms import RemoveDocumentForm
-
-        return RemoveDocumentForm(instance=self)
-
 
 @receiver(post_delete, sender=PacketFile)
 def delete_packetfile_file(sender, instance, **kwargs):
@@ -682,19 +737,6 @@ class ContractPacketFile(models.Model):
 
     def __str__(self):
         return _("Contract file: {title}").format(title=self.title)
-
-    def get_remove_form(self):
-        """
-        Get an instantiated RemoveContractDocumentForm with this class as `instance`.
-
-        This allows us to build instances of the RemoveContractDocumentForm for each
-        instance of ContractPacketFile in the contracting documents template.  The
-        standard Delegated View flow makes it difficult to create these forms
-        in the view or template.
-        """
-        from ..forms import RemoveContractDocumentForm
-
-        return RemoveContractDocumentForm(instance=self)
 
 
 @receiver(post_delete, sender=ContractPacketFile)
@@ -731,6 +773,14 @@ class DocumentCategory(models.Model):
 class ContractDocumentCategory(models.Model):
     name = models.CharField(max_length=254)
     recommended_minimum = models.PositiveIntegerField(null=True, blank=True)
+    document_access_view = models.ManyToManyField(
+        Group,
+        limit_choices_to={"name__in": ROLES_ORG_FACULTY},
+        verbose_name=_("Allow document access for groups"),
+        help_text=_("Only selected group's users can access the document"),
+        related_name="contract_document_category",
+        blank=True,
+    )
     required = models.BooleanField(default=True)
     template = models.FileField(
         upload_to=contract_document_template_path,
@@ -749,8 +799,11 @@ class ContractDocumentCategory(models.Model):
     panels = [
         FieldPanel("name"),
         FieldPanel("required"),
+        FieldPanel("document_access_view", widget=forms.CheckboxSelectMultiple),
         FieldPanel("template"),
     ]
+
+    base_form_class = ContractDocumentCategoryAdminForm
 
 
 class Deliverable(models.Model):

@@ -1,28 +1,6 @@
-@use "sass:math";
+@use "../abstracts/variables";
 
 // $TYPOGRAPHY
-// Base font
-html {
-    color: $color--default;
-}
-
-/* ============================================
-    Families – one mixin per typeface
-    :: For each font mixin defined here, make sure each property is negated (set
-    :: to its default value, usually `inherit`) in all other font mixins.
-*/
-@mixin heading-text {
-    margin: 0 0 1rem;
-    font-style: inherit;
-    font-weight: $weight--semibold;
-}
-
-@mixin body-text {
-    font-family: $font--primary;
-    font-style: inherit;
-    font-weight: inherit;
-    text-transform: inherit;
-}
 
 h1,
 h2,
@@ -31,11 +9,9 @@ h4,
 h5,
 h6,
 .heading-text {
-    @include heading-text;
-}
-
-.body-text {
-    @include responsive-font-sizes($base-font-size, $base-font-size-large);
+    margin-block: 0 1rem;
+    font-style: inherit;
+    font-weight: variables.$weight--semibold;
 }
 
 // Default sizes
@@ -80,7 +56,7 @@ h5,
 h6,
 %h6,
 .zeta {
-    @include font-size(zeta);
+    font-size: 1rem;
 }
 
 small,

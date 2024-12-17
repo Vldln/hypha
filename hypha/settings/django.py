@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "hypha.apply.determinations",
     "hypha.apply.stream_forms",
     "hypha.apply.todo",
+    "hypha.apply.translate",
     "hypha.apply.utils.apps.UtilsConfig",
     "hypha.apply.projects.apps.ProjectsConfig",
     "hypha.public.funds",
@@ -58,7 +59,7 @@ INSTALLED_APPS = [
     "django_tables2",
     "django_filters",
     "django_select2",
-    "addressfield",
+    "hypha.addressfield",
     "django_nh3",
     "django_fsm",
     "django_slack",
@@ -66,12 +67,10 @@ INSTALLED_APPS = [
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
     "two_factor",
-    "drf_yasg",
     "rest_framework",
     "rest_framework_api_key",
-    "wagtailcache",
-    "wagtail_purge",
     "django_file_form",
+    "rolepermissions",
     "hijack",
     "elevate",  # https://django-elevate.readthedocs.io/
     "pagedown",
@@ -90,6 +89,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.common.CommonMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "elevate.middleware.ElevateMiddleware",
@@ -106,6 +106,7 @@ MIDDLEWARE = [
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
     "hypha.apply.middleware.HandleProtectionErrorMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "hypha.core.middleware.htmx.HtmxMessageMiddleware",
 ]
 
 # Logging
@@ -222,6 +223,10 @@ AUTHENTICATION_BACKENDS = (
     "social_core.backends.google.GoogleOAuth2",
     CUSTOM_AUTH_BACKEND,
 )
+
+# django-rolepermissions
+# https://django-role-permissions.readthedocs.io/en/stable/settings.html
+ROLEPERMISSIONS_MODULE = "hypha.apply.users.roles"
 
 # Default Auto field configuration
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"

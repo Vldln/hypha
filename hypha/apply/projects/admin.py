@@ -1,6 +1,6 @@
 from wagtail.contrib.modeladmin.options import ModelAdmin, ModelAdminGroup
 
-from hypha.apply.utils.admin import ListRelatedMixin
+from hypha.apply.utils.admin import AdminIcon, ListRelatedMixin
 from hypha.core.wagtail.admin import SettingModelAdmin
 
 from .admin_views import (
@@ -18,13 +18,12 @@ from .models import (
     ProjectReportForm,
     ProjectSettings,
     ProjectSOWForm,
-    VendorFormSettings,
 )
 
 
 class DocumentCategoryAdmin(ModelAdmin):
     model = DocumentCategory
-    menu_icon = "doc-full"
+    menu_icon = str(AdminIcon.DOCUMENT_CATEGORY)
     list_display = (
         "name",
         "required",
@@ -33,7 +32,7 @@ class DocumentCategoryAdmin(ModelAdmin):
 
 class ContractDocumentCategoryAdmin(ModelAdmin):
     model = ContractDocumentCategory
-    menu_icon = "doc-full"
+    menu_icon = str(AdminIcon.CONTRACT_DOCUMENT_CATEGORY)
     list_display = (
         "name",
         "required",
@@ -43,7 +42,7 @@ class ContractDocumentCategoryAdmin(ModelAdmin):
 class ProjectFormAdmin(ListRelatedMixin, ModelAdmin):
     model = ProjectForm
     menu_label = "Project Forms"
-    menu_icon = "form"
+    menu_icon = str(AdminIcon.PROJECT_FORM)
     list_display = (
         "name",
         "used_by",
@@ -60,7 +59,7 @@ class ProjectFormAdmin(ListRelatedMixin, ModelAdmin):
 class ProjectSOWFormAdmin(ListRelatedMixin, ModelAdmin):
     model = ProjectSOWForm
     menu_label = "SOW Forms"
-    menu_icon = "form"
+    menu_icon = str(AdminIcon.PROJECT_SOW_FORM)
     list_display = (
         "name",
         "used_by",
@@ -77,7 +76,7 @@ class ProjectSOWFormAdmin(ListRelatedMixin, ModelAdmin):
 class ProjectReportFormAdmin(ListRelatedMixin, ModelAdmin):
     model = ProjectReportForm
     menu_label = "Report Forms"
-    menu_icon = "form"
+    menu_icon = str(AdminIcon.PROJECT_REPORT_FORM)
     list_display = (
         "name",
         "used_by",
@@ -95,19 +94,14 @@ class ProjectSettingsAdmin(SettingModelAdmin):
     model = ProjectSettings
 
 
-class VendorFormSettingsAdmin(SettingModelAdmin):
-    model = VendorFormSettings
-
-
 class ProjectAdminGroup(ModelAdminGroup):
     menu_label = "Projects"
-    menu_icon = "folder-open-1"
+    menu_icon = str(AdminIcon.PROJECT)
     items = (
         ContractDocumentCategoryAdmin,
         DocumentCategoryAdmin,
         ProjectFormAdmin,
         ProjectReportFormAdmin,
         ProjectSOWFormAdmin,
-        VendorFormSettingsAdmin,
         ProjectSettingsAdmin,
     )

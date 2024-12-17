@@ -1,3 +1,4 @@
+import datetime
 import decimal
 
 import factory
@@ -10,7 +11,7 @@ from hypha.apply.stream_forms.testing.factories import (
     FormFieldsBlockFactory,
     NonFileFormFieldsBlockFactory,
 )
-from hypha.apply.users.groups import APPROVER_GROUP_NAME, STAFF_GROUP_NAME
+from hypha.apply.users.roles import APPROVER_GROUP_NAME, STAFF_GROUP_NAME
 from hypha.apply.users.tests.factories import GroupFactory, StaffFactory, UserFactory
 
 from ..models.payment import Invoice, InvoiceDeliverable, SupportingDocument
@@ -177,6 +178,7 @@ class PacketFileFactory(factory.django.DjangoModelFactory):
 class InvoiceFactory(factory.django.DjangoModelFactory):
     invoice_number = factory.Faker("name")
     invoice_amount = decimal.Decimal("10")
+    invoice_date = factory.LazyFunction(datetime.date.today)
     project = factory.SubFactory(ProjectFactory)
     by = factory.SubFactory(UserFactory)
     document = factory.django.FileField()
@@ -210,18 +212,16 @@ class ReportConfigFactory(factory.django.DjangoModelFactory):
         )
 
 
-class ReportVersionDataFactory(FormDataFactory):
+class ReportDataFactory(FormDataFactory):
     field_factory = NonFileFormFieldsBlockFactory
 
 
 class ReportVersionFactory(factory.django.DjangoModelFactory):
     report = factory.SubFactory("hypha.apply.projects.tests.factories.ReportFactory")
     submitted = factory.LazyFunction(timezone.now)
-    form_fields = NonFileFormFieldsBlockFactory
-    # TODO: is it better to keep the following link between form_data and form_fields or to remove it?
     form_data = factory.SubFactory(
-        ReportVersionDataFactory,
-        form_fields=factory.SelfAttribute("..form_fields"),
+        ReportDataFactory,
+        form_fields=factory.SelfAttribute("..report.form_fields"),
     )
     draft = True
 
@@ -245,6 +245,12 @@ class ReportVersionFactory(factory.django.DjangoModelFactory):
 class ReportFactory(factory.django.DjangoModelFactory):
     project = factory.SubFactory(
         "hypha.apply.projects.tests.factories.ApprovedProjectFactory"
+    )
+    form_fields = NonFileFormFieldsBlockFactory
+    # TODO: is it better to keep the following link between form_data and form_fields or to remove it?
+    form_data = factory.SubFactory(
+        ReportDataFactory,
+        form_fields=factory.SelfAttribute("..form_fields"),
     )
     end_date = factory.LazyFunction(timezone.now)
 

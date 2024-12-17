@@ -8,7 +8,7 @@ from django_file_form.forms import FileFormMixin
 from hypha.apply.funds.models import ApplicationSubmission
 from hypha.apply.stream_forms.fields import SingleFileField
 from hypha.apply.stream_forms.forms import StreamBaseForm
-from hypha.apply.users.groups import STAFF_GROUP_NAME
+from hypha.apply.users.roles import STAFF_GROUP_NAME
 
 from ..models.project import (
     CLOSING,
@@ -47,7 +47,7 @@ def get_latest_project_paf_approval_via_roles(project, roles):
 class ApproveContractForm(forms.Form):
     id = forms.IntegerField(widget=forms.HiddenInput())
 
-    def __init__(self, instance, *args, **kwargs):
+    def __init__(self, *args, instance, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance = instance
         if instance:
@@ -85,7 +85,7 @@ class ProjectCreateForm(forms.Form):
         label=_("Select Project Lead"), queryset=User.objects.all()
     )
 
-    def __init__(self, instance=None, user=None, *args, **kwargs):
+    def __init__(self, *args, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if instance:
@@ -183,7 +183,9 @@ class ProjectSOWForm(StreamBaseForm, forms.ModelForm, metaclass=MixedMetaClass):
 class ChangePAFStatusForm(forms.ModelForm):
     name_prefix = "change_paf_status_form"
     paf_status = forms.ChoiceField(
-        label=_("PAF status"), choices=PAF_STATUS_CHOICES, widget=forms.RadioSelect()
+        label=_("Project form status"),
+        choices=PAF_STATUS_CHOICES,
+        widget=forms.RadioSelect(),
     )
     comment = forms.CharField(required=False, widget=forms.Textarea)
 
@@ -191,7 +193,7 @@ class ChangePAFStatusForm(forms.ModelForm):
         fields = ["paf_status", "comment"]
         model = Project
 
-    def __init__(self, instance, user, *args, **kwargs):
+    def __init__(self, *args, user=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs, instance=instance)
         self.fields["paf_status"].widget.attrs["class"] = "grid--status-update"
 
@@ -204,7 +206,7 @@ class ChangeProjectStatusForm(forms.ModelForm):
         fields = ["status", "comment"]
         model = Project
 
-    def __init__(self, instance, user, *args, **kwargs):
+    def __init__(self, *args, instance=None, user=None, **kwargs):
         super().__init__(*args, **kwargs, instance=instance)
         status_field = self.fields["status"]
         possible_status_transitions = {
@@ -215,35 +217,13 @@ class ChangeProjectStatusForm(forms.ModelForm):
         status_field.choices = possible_status_transitions.get(instance.status, [])
 
 
-class RemoveDocumentForm(forms.ModelForm):
-    id = forms.IntegerField(widget=forms.HiddenInput())
-
-    class Meta:
-        fields = ["id"]
-        model = PacketFile
-
-    def __init__(self, user=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-class RemoveContractDocumentForm(forms.ModelForm):
-    id = forms.IntegerField(widget=forms.HiddenInput())
-
-    class Meta:
-        fields = ["id"]
-        model = ContractPacketFile
-
-    def __init__(self, user=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
 class ApproversForm(forms.ModelForm):
     class Meta:
         fields = ["id"]
         model = Project
         widgets = {"id": forms.HiddenInput()}
 
-    def __init__(self, user=None, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         from hypha.apply.activity.adapters.utils import get_users_for_groups
 
         super().__init__(*args, **kwargs)
@@ -306,7 +286,7 @@ class AssignApproversForm(forms.ModelForm):
         model = Project
         widgets = {"id": forms.HiddenInput()}
 
-    def __init__(self, user=None, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         from hypha.apply.activity.adapters.utils import get_users_for_groups
 
         super().__init__(*args, **kwargs)
@@ -355,6 +335,16 @@ class SubmitContractDocumentsForm(forms.ModelForm):
         model = Project
         widgets = {"id": forms.HiddenInput()}
 
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+class SkipPAFApprovalProcessForm(forms.ModelForm):
+    class Meta:
+        fields = ["id"]
+        model = Project
+        widgets = {"id": forms.HiddenInput()}
+
     def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -371,9 +361,12 @@ class SkipPAFApprovalProcessForm(forms.ModelForm):
 
 class UploadContractForm(FileFormMixin, forms.ModelForm):
     file = SingleFileField(label=_("Contract"), required=True)
+    signed_and_approved = forms.BooleanField(
+        label=_("Signed and approved"), required=False
+    )
 
     class Meta:
-        fields = ["file"]
+        fields = ["file", "signed_and_approved"]
         model = Contract
 
     def save(self, commit=True):
@@ -395,8 +388,9 @@ class UploadDocumentForm(FileFormMixin, forms.ModelForm):
     class Meta:
         fields = ["category", "document"]
         model = PacketFile
+        widgets = {"category": forms.HiddenInput()}
 
-    def __init__(self, user=None, instance=None, *args, **kwargs):
+    def __init__(self, *args, user=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
 
     def save(self, commit=True):
@@ -410,8 +404,9 @@ class UploadContractDocumentForm(FileFormMixin, forms.ModelForm):
     class Meta:
         fields = ["category", "document"]
         model = ContractPacketFile
+        widgets = {"category": forms.HiddenInput()}
 
-    def __init__(self, user=None, instance=None, *args, **kwargs):
+    def __init__(self, *args, user=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
 
     def save(self, commit=True):
@@ -424,7 +419,7 @@ class UpdateProjectLeadForm(forms.ModelForm):
         fields = ["lead"]
         model = Project
 
-    def __init__(self, user=None, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         lead_field = self.fields["lead"]
@@ -438,3 +433,12 @@ class UpdateProjectLeadForm(forms.ModelForm):
             .filter(qwargs)
             .distinct()
         )
+
+
+class UpdateProjectTitleForm(forms.ModelForm):
+    class Meta:
+        fields = ["title"]
+        model = Project
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)

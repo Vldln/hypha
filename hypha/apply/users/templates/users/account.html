@@ -11,7 +11,7 @@
         <span class="flex gap-4">
             {% if user.can_access_dashboard %}
                 <a href="{% url 'dashboard:dashboard' %}" class="button button--primary">
-                    {% heroicon_mini "squares-2x2" size=20 class="mr-1 inline align-text-bottom" %}
+                    {% heroicon_mini "squares-2x2" size=20 class="me-1 inline align-text-bottom" aria_hidden=true %}
                     {% trans "Go to my dashboard" %}
                 </a>
             {% else %}
@@ -28,16 +28,17 @@
             {% endif %}
             {% if perms.wagtailadmin.access_admin %}
                 <a href="{% url 'wagtailadmin_home' %}" id="wagtail-admin-button" class="button button--primary">
-                    {% heroicon_mini "wrench-screwdriver" size=20 class="mr-1 inline align-text-bottom" %}
-                    {% trans "Admin" %}
+                    {% heroicon_solid "cog-6-tooth" size=20 class="me-1 inline align-text-bottom" aria_hidden=true %}
+                    {% trans "Administration" %}
                 </a>
             {% endif %}
         </span>
     {% endadminbar %}
 
-    <div class="profile">
-        <div class="profile__column">
+    <div class="flex flex-col gap-8 justify-between my-8 md:flex-row md:divide-x">
+        <div class="flex-1">
             <h2 class="text-2xl">{% trans "Profile" %}</h2>
+
             <form action="" method="post" class="form">
                 {% csrf_token %}
                 {% for field in form %}
@@ -50,7 +51,7 @@
         </div>
 
 
-        <div class="profile__column">
+        <div class="flex-1 md:ps-8">
             <h2 class="text-2xl">{% trans "Account Security" %}</h2>
 
             {% if show_change_password %}
@@ -86,7 +87,7 @@
 
 
         {% if swappable_form %}
-            <div class="profile__column">
+            <div class="flex-1 md:ps-8">
                 {% if swappable_form %}
                     <h2 class="text-2xl">{% trans "Become" %}:</h2>
                     <form action="{% url 'hijack-become' %}" method="post" class="form">

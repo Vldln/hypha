@@ -1,10 +1,10 @@
 import json
 
 from django import forms
-from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models.fields.files import FieldFile
+from django.forms.widgets import RadioSelect
 from django.utils.translation import gettext_lazy as _
 from django_file_form.forms import FileFormMixin
 
@@ -12,10 +12,8 @@ from hypha.apply.stream_forms.fields import MultiFileField, SingleFileField
 
 from ..models.payment import (
     APPROVED_BY_FINANCE,
-    APPROVED_BY_FINANCE_2,
     APPROVED_BY_STAFF,
     CHANGES_REQUESTED_BY_FINANCE,
-    CHANGES_REQUESTED_BY_FINANCE_2,
     CHANGES_REQUESTED_BY_STAFF,
     DECLINED,
     INVOICE_STATUS_CHOICES,
@@ -61,46 +59,43 @@ def get_invoice_possible_transition_for_user(user, invoice):
         PAID: filter_request_choices([PAYMENT_FAILED], user_choices),
         PAYMENT_FAILED: filter_request_choices([PAID], user_choices),
     }
-    if settings.INVOICE_EXTENDED_WORKFLOW:
-        possible_status_transitions_lut.update(
-            {
-                CHANGES_REQUESTED_BY_FINANCE_2: filter_request_choices(
-                    [
-                        CHANGES_REQUESTED_BY_FINANCE,
-                        APPROVED_BY_FINANCE,
-                    ],
-                    user_choices,
-                ),
-                APPROVED_BY_FINANCE: filter_request_choices(
-                    [CHANGES_REQUESTED_BY_FINANCE_2, APPROVED_BY_FINANCE_2],
-                    user_choices,
-                ),
-                APPROVED_BY_FINANCE_2: filter_request_choices([PAID], user_choices),
-            }
-        )
     return possible_status_transitions_lut.get(invoice.status, [])
 
 
 class ChangeInvoiceStatusForm(forms.ModelForm):
     name_prefix = "change_invoice_status_form"
 
+    paid_date = forms.DateField(required=False)
+
     class Meta:
-        fields = ["status", "comment"]
+        fields = ["status", "paid_date", "comment"]
         model = Invoice
+        widgets = {"status": RadioSelect}
 
-    def __init__(self, instance, user, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user")
+        instance = kwargs.pop("instance")
         super().__init__(*args, **kwargs, instance=instance)
-        self.initial["comment"] = ""
-        status_field = self.fields["status"]
-
-        status_field.choices = get_invoice_possible_transition_for_user(
+        invoice_choices = get_invoice_possible_transition_for_user(
             user, invoice=instance
         )
+
+        self.initial["comment"] = ""
+        if len(invoice_choices) > 4:
+            self.fields["status"] = forms.TypedChoiceField(choices=invoice_choices)
+        else:
+            self.fields["status"].choices = invoice_choices
 
 
 class InvoiceBaseForm(forms.ModelForm):
     class Meta:
-        fields = ["invoice_number", "invoice_amount", "document", "message_for_pm"]
+        fields = [
+            "invoice_number",
+            "invoice_amount",
+            "invoice_date",
+            "document",
+            "message_for_pm",
+        ]
         model = Invoice
 
     def __init__(self, user=None, *args, **kwargs):
@@ -124,6 +119,7 @@ class CreateInvoiceForm(FileFormMixin, InvoiceBaseForm):
     field_order = [
         "invoice_number",
         "invoice_amount",
+        "invoice_date",
         "document",
         "supporting_documents",
         "message_for_pm",
@@ -149,6 +145,7 @@ class EditInvoiceForm(FileFormMixin, InvoiceBaseForm):
     field_order = [
         "invoice_number",
         "invoice_amount",
+        "invoice_date",
         "document",
         "supporting_documents",
         "message_for_pm",
@@ -209,9 +206,7 @@ class SelectDocumentForm(forms.ModelForm):
 
 class BatchUpdateInvoiceStatusForm(forms.Form):
     invoice_action = forms.ChoiceField(label=_("Status"))
-    invoices = forms.CharField(
-        widget=forms.HiddenInput(attrs={"class": "js-invoices-id"})
-    )
+    invoices = forms.CharField(widget=forms.HiddenInput(attrs={"id": "js-invoices-id"}))
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user")

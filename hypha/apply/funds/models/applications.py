@@ -24,6 +24,7 @@ from django.db.models.functions import Coalesce, Left, Length
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.template.response import TemplateResponse
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
@@ -42,6 +43,7 @@ from wagtail.fields import RichTextField
 from wagtail.models import Page, PageManager
 from wagtail.query import PageQuerySet
 
+from hypha.apply.funds.utils import get_copied_form_name
 from hypha.core.wagtail.admin.panels import ReadOnlyInlinePanel
 
 from ..admin_forms import RoundBasePageAdminForm, WorkflowFormAdminForm
@@ -211,6 +213,17 @@ class RoundBase(WorkflowStreamForm, SubmittableStreamForm):  # type: ignore
     # Adds validation for making start_date required
     base_form_class = RoundBasePageAdminForm
 
+    submission_id_prefix = models.SlugField(
+        _("Submission ID Prefix"),
+        max_length=10,
+        blank=True,
+        default="",
+        null=False,
+        help_text=_(
+            'Prefix for the submission id. e.g. "HYPHA23-" will result in a submission id of "HYPHA23-1".'
+        ),
+    )
+
     lead = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         limit_choices_to=LIMIT_TO_STAFF,
@@ -260,6 +273,7 @@ class RoundBase(WorkflowStreamForm, SubmittableStreamForm):  # type: ignore
             heading=_("Dates"),
         ),
         FieldPanel("reviewers", widget=forms.CheckboxSelectMultiple),
+        FieldPanel("submission_id_prefix"),
         ReadOnlyPanel(
             "get_workflow_name_display",
             heading=_("Workflow"),
@@ -355,9 +369,8 @@ class RoundBase(WorkflowStreamForm, SubmittableStreamForm):  # type: ignore
         # Create a copy of the existing form object
         new_form = form.form
         new_form.id = None
-        new_form.name = "{} for {} ({})".format(
-            new_form.name, self.title, self.get_parent().title
-        )
+        new_form.name = get_copied_form_name(new_form.name)
+
         new_form.save()
         if hasattr(form, "stage"):
             new_class.objects.create(round=self, form=new_form, stage=form.stage)
@@ -555,6 +568,16 @@ class LabBase(EmailForm, WorkflowStreamForm, SubmittableStreamForm):  # type: ig
         related_name="lab_lead",
         on_delete=models.PROTECT,
     )
+    submission_id_prefix = models.SlugField(
+        _("Submission ID Prefix"),
+        max_length=10,
+        blank=True,
+        default="",
+        null=False,
+        help_text=_(
+            'Prefix for the submission id. e.g. "HYPHA23-" will result in a submission id of "HYPHA23-1".'
+        ),
+    )
     reviewers = ParentalManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name="labs_reviewer",
@@ -609,6 +632,7 @@ class LabBase(EmailForm, WorkflowStreamForm, SubmittableStreamForm):  # type: ig
         FieldPanel("image"),
         FieldPanel("weight"),
         FieldPanel("slack_channel"),
+        FieldPanel("submission_id_prefix"),
         FieldPanel("activity_digest_recipient_emails"),
         FieldPanel("list_on_front_page"),
     ]
@@ -810,6 +834,12 @@ class RoundsAndLabs(Page):
         return my_pk == other.pk
 
     objects = RoundsAndLabsManager()
+
+    def get_absolute_url(self):
+        params = f"fund={self.pk}"
+        if self.fund:
+            params = f"round={self.pk}"
+        return f'{reverse("apply:submissions:list")}?{params}'
 
     def save(self, *args, **kwargs):
         raise NotImplementedError("Do not save through this model")

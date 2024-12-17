@@ -1,12 +1,15 @@
+@use "../abstracts/mixins";
+@use "../abstracts/variables";
+
 // stylelint-disable selector-max-compound-selectors
 
 .projects-table {
-    @include table-ordering-styles;
+    @include mixins.table-ordering-styles;
 
     thead {
         display: none;
 
-        @include media-query($table-breakpoint) {
+        @include mixins.media-query(lg) {
             display: table-header-group;
         }
     }
@@ -18,7 +21,7 @@
                 display: inline-block;
                 width: 90px;
 
-                @include media-query($table-breakpoint) {
+                @include mixins.media-query(lg) {
                     display: none;
                 }
             }
@@ -30,28 +33,28 @@
             margin-inline-end: 0.3rem;
             width: 25px;
             height: 25px;
-            fill: $color--tomato;
+            fill: variables.$color--tomato;
         }
     }
 }
 
 .invoices-table {
-    @include table-ordering-styles;
+    @include mixins.table-ordering-styles;
 
     thead {
         display: none;
 
-        @include media-query($table-breakpoint) {
+        @include mixins.media-query(lg) {
             display: table-header-group;
         }
 
         th {
             &.selected {
-                @include table-checkbox;
+                @include mixins.table-checkbox;
 
-                @include media-query($table-breakpoint) {
+                @include mixins.media-query(lg) {
                     width: 50px;
-                    padding-right: 0;
+                    padding-inline-end: 0;
                 }
             }
         }
@@ -64,19 +67,39 @@
                 display: inline-block;
                 width: 90px;
 
-                @include media-query($table-breakpoint) {
+                @include mixins.media-query(lg) {
                     display: none;
                 }
             }
 
             // batch action checkboxes
             &.selected {
-                @include table-checkbox;
+                @include mixins.table-checkbox;
                 display: none;
-                padding-right: 0;
+                padding-inline-end: 0;
 
-                @include media-query($table-breakpoint) {
+                @include mixins.media-query(lg) {
                     display: table-cell;
+                }
+            }
+        }
+    }
+}
+
+.reporting-table {
+    @include mixins.table-ordering-styles;
+
+    tbody {
+        td {
+            &.status {
+                span {
+                    display: inline-block;
+                    padding: 5px;
+                    font-size: 13px;
+                    font-weight: variables.$weight--bold;
+                    color: variables.$color--white;
+                    text-align: center;
+                    background-color: variables.$color--dark-blue;
                 }
             }
         }

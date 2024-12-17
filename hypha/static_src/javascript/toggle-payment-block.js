@@ -1,18 +1,17 @@
 (function ($) {
-    "use strict";
+  /**
+   * Toggle payment block
+   */
+  function togglePaymentBlock() {
+    $(".js-payment-block-rejected-link").click(function (e) {
+      e.preventDefault();
 
-    function togglePaymentBlock() {
-        $(".js-payment-block-rejected-link").click(function (e) {
-            e.preventDefault();
+      this.innerHTML =
+        this.innerHTML === "Show rejected" ? "Hide rejected" : "Show rejected";
 
-            this.innerHTML =
-                this.innerHTML === "Show rejected"
-                    ? "Hide rejected"
-                    : "Show rejected";
+      $(".js-payment-block-rejected-table").toggleClass("is-hidden");
+    });
+  }
 
-            $(".js-payment-block-rejected-table").toggleClass("is-hidden");
-        });
-    }
-
-    togglePaymentBlock();
+  togglePaymentBlock();
 })(jQuery);

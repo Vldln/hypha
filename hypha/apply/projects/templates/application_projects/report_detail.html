@@ -19,7 +19,9 @@
         <div class="wrapper--sidebar--inner">
             <div class="alert">
                 {% heroicon_outline 'exclamation-circle' stroke_width=2 size=22 class="inline me-1 stroke-dark-blue" aria_hidden=true %}
-                <p class="alert__text">{% trans "This report is for the period" %} <strong>{{ report.start_date }}</strong> {% trans "to" %} <strong>{{ report.end_date }}</strong></p>
+                <p class="alert__text">
+                    {% trans "This report is for the period" %} <strong>{{ object.start_date }}</strong> {% trans "to" %} <strong>{{ object.end_date }}</strong>
+                </p>
             </div>
 
             <div class="card card--solid">
@@ -29,7 +31,7 @@
                     <h4>{% trans "Public Report" %}</h4>
                     <div class="card card--solid">
                         {% if object.current %}
-                            <div class="simplified__paf_answers">
+                            <div class="rich-text rich-text--answers">
                                 {{ object.current.output_answers }}
                             </div>
                         {% endif %}
@@ -37,7 +39,7 @@
 
                     {% for file in object.current.files.all %}
                         {% if forloop.first %}
-                            <h4>{% trans "Attachements" %}</h4>
+                            <h4>{% trans "Attachments" %}</h4>
                             <ul>
                         {% endif %}
 

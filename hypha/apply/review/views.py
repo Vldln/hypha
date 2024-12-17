@@ -67,7 +67,9 @@ class ReviewEditView(UserPassesTestMixin, BaseStreamForm, UpdateView):
     def get_context_data(self, **kwargs):
         review = self.get_object()
         return super().get_context_data(
-            submission=review.submission, title=_("Edit Review"), **kwargs
+            submission=review.submission,
+            title=_("Edit Review"),
+            **kwargs,
         )
 
     def get_defined_fields(self):
@@ -433,7 +435,7 @@ class ReviewListView(ListView):
             author = '<a href="{}"><span>{}</span></a>'.format(
                 review.get_absolute_url(), review.author
             )
-            if review.author.role:
+            if review.author.role and review.author.role.icon:
                 author += generate_image_tag(review.author.role.icon, "12x12")
             author = f"<div>{author}</div>"
 

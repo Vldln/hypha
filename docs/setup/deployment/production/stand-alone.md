@@ -102,7 +102,13 @@ Inside your activated virtual environment you will use plain `python` and `pip` 
 Next, install the required packages using:
 
 ```shell
-python3 -m pip install -r requirements.txt
+python3 -m pip install --no-deps -r requirements.txt
+```
+
+If utilizing application machine translations, install the required dependencies:
+
+```shell
+python3 -m pip install -r requirements/translate.txt
 ```
 
 ### Install Node packages
@@ -152,7 +158,8 @@ npm run build
 python manage.py collectstatic --noinput
 python manage.py createcachetable
 python manage.py migrate --noinput
-python manage.py clear_cache --cache=default --cache=wagtailcache
+python manage.py sync_roles
+python manage.py clear_cache --cache=default
 python manage.py createsuperuser
 python manage.py wagtailsiteupdate apply.server.domain 80
 python manage.py runserver
@@ -270,4 +277,3 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_KEY:                 [KEY]
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET:              [KEY]
 SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_DOMAINS: example.org
 ```
-

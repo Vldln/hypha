@@ -5,9 +5,11 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.template.defaultfilters import mark_safe
 from django.utils.translation import gettext_lazy as _
 from django_select2.forms import Select2Widget
+from rolepermissions import roles
 from wagtail.users.forms import UserCreationForm, UserEditForm
 
-from .models import AuthSettings, GroupDesc
+from .models import AuthSettings
+from .utils import strip_html_and_nerf_urls
 
 User = get_user_model()
 
@@ -56,6 +58,16 @@ class PasswordlessAuthForm(forms.Form):
         max_length=254,
         widget=forms.EmailInput(attrs={"autofocus": True, "autocomplete": "email"}),
     )
+
+    if settings.SESSION_COOKIE_AGE <= settings.SESSION_COOKIE_AGE_LONG:
+        remember_me = forms.BooleanField(
+            label=_("Remember me"),
+            help_text=_(
+                "On trusted devices only, keeps you logged in for a longer period."
+            ),
+            required=False,
+            widget=forms.CheckboxInput(),
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -114,7 +126,9 @@ class GroupsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
         """
         Overwriting ModelMultipleChoiceField's label from instance to provide help_text (if it exists)
         """
-        help_text = GroupDesc.get_from_group(group_obj)
+        help_text = getattr(
+            roles.registered_roles.get(group_obj.name, {}), "help_text", ""
+        )
         if help_text:
             return mark_safe(
                 f'{group_obj.name}<p class="group-help-text">{help_text}</p>'
@@ -164,7 +178,7 @@ class ProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
-        if not self.instance.is_apply_staff_or_finance:
+        if not self.instance.is_org_faculty:
             del self.fields["slack"]
 
         if self.request is not None:
@@ -197,6 +211,9 @@ class ProfileForm(forms.ModelForm):
                 self.instance.email
             )  # updated email to avoid email existing message, fix information leak.
         return email
+
+    def clean_full_name(self):
+        return strip_html_and_nerf_urls(self.cleaned_data["full_name"])
 
 
 class BecomeUserForm(forms.Form):

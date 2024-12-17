@@ -50,9 +50,9 @@ def render_actions(table, record):
 
 def render_title(record):
     try:
-        title = record.title
+        title = record.title_text_display
     except AttributeError:
-        title = record.submission.title
+        title = record.submission.title_text_display
     return title
 
 
@@ -73,7 +73,7 @@ class SubmissionsTable(tables.Table):
                 "class": "js-title",
             },
             "a": {
-                "data-tippy-content": lambda record: record.title,
+                "data-tippy-content": lambda record: render_title(record),
                 "data-tippy-placement": "top",
                 # Use after:content-[''] after:block to hide the default browser tooltip on Safari
                 # https://stackoverflow.com/a/43915246
@@ -196,27 +196,15 @@ class BaseAdminSubmissionsTable(SubmissionsTable):
 
     def render_screening_status(self, value):
         try:
-            status = value.get(default=True).title
+            status = value.get()
+            classname = "status-yes" if status.yes else "status-no text-red-500"
+            return format_html(
+                f"<span class='font-medium text-xs {classname}'>{'👍' if status.yes else '👎'} {status.title}</span>"
+            )
         except ScreeningStatus.DoesNotExist:
-            return format_html("<span>{}</span>", "Awaiting")
-        else:
-            return format_html("<span>{}</span>", status)
-
-
-class AdminSubmissionsTable(BaseAdminSubmissionsTable):
-    """Adds admin only columns to the submissions table"""
-
-    selected = LabeledCheckboxColumn(
-        accessor=A("pk"),
-        attrs={
-            "input": {"class": "js-batch-select"},
-            "th__input": {"class": "js-batch-select-all"},
-        },
-    )
-
-    class Meta(BaseAdminSubmissionsTable.Meta):
-        fields = ("selected", *BaseAdminSubmissionsTable.Meta.fields)
-        sequence = fields
+            return format_html(
+                "<span class='text-xs text-fg-muted'>{}</span>", "Awaiting"
+            )
 
 
 class SummarySubmissionsTable(BaseAdminSubmissionsTable):
@@ -513,11 +501,9 @@ class SubmissionReviewerFilterAndSearch(SubmissionDashboardFilter):
 
 
 class RoundsTable(tables.Table):
-    title = tables.LinkColumn(
-        "funds:rounds:detail",
-        args=[A("pk")],
+    title = tables.Column(
+        linkify=lambda record: record.get_absolute_url(),
         orderable=True,
-        text=lambda record: record.title,
     )
     fund = tables.Column(accessor=A("specific__fund"))
     lead = tables.Column()
@@ -637,12 +623,12 @@ class ReviewerLeaderboardFilter(filters.FilterSet):
         queryset=get_all_reviewers,
     )
     funds = Select2ModelMultipleChoiceFilter(
-        field_name="submission__page",
+        field_name="applicationsubmission__page",
         label=_("Funds"),
         queryset=get_used_funds,
     )
     rounds = Select2ModelMultipleChoiceFilter(
-        field_name="submission__round",
+        field_name="applicationsubmission__round",
         label=_("Rounds"),
         queryset=get_used_rounds,
     )
@@ -692,7 +678,7 @@ class ReviewerLeaderboardDetailTable(tables.Table):
                 "class": "js-title",
             },
             "a": {
-                "data-tippy-content": lambda record: record.submission.title,
+                "data-tippy-content": lambda record: render_title(record),
                 "data-tippy-placement": "top",
                 # Use after:content-[''] after:block to hide the default browser tooltip on Safari
                 # https://stackoverflow.com/a/43915246

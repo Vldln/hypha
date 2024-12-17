@@ -185,7 +185,7 @@ class TestRoundModelWorkflowAndForms(TestCase):
         del self.round.parent_page
         form = self.round.forms.first().form
         # Not ideal, would prefer better way to create the stream values
-        new_field = CustomFormFieldsFactory.generate(None, {})
+        new_field = CustomFormFieldsFactory.evaluate(self.round, None, {})
         form.form_fields = new_field
         form.save()
         for round_form, fund_form in itertools.zip_longest(
@@ -437,7 +437,7 @@ class TestApplicationSubmission(TestCase):
         self.assertNotIn(str(value), submission.search_data)
 
     def test_file_gets_uploaded(self):
-        filename = "file_name.png"
+        filename = "test_image.png"
         submission = self.make_submission(form_data__image__filename=filename)
         path = os.path.join(settings.MEDIA_ROOT, "submission", str(submission.id))
 

@@ -1,15 +1,18 @@
+@use "../abstracts/mixins";
+@use "../abstracts/variables";
+
 // stylelint-disable max-nesting-depth
 
 .reviews-sidebar {
     $root: &;
     margin-block-end: 20px;
-    font-weight: $weight--bold;
+    font-weight: variables.$weight--bold;
 
     &__decision {
         position: relative;
         font-size: 14px;
-        border-block-start: 1px solid $color--mid-grey;
-        border-block-end: 1px solid $color--mid-grey;
+        border-block-start: 1px solid variables.$color--mid-grey;
+        border-block-end: 1px solid variables.$color--mid-grey;
         margin-block-end: 20px;
         padding-block-start: 10px;
     }
@@ -27,7 +30,7 @@
 
         &--decision {
             margin-block-end: 10px;
-            font-weight: $weight--semibold;
+            font-weight: variables.$weight--semibold;
 
             &:first-child {
                 #{$root}__outcome {
@@ -39,12 +42,20 @@
                     }
 
                     &::after {
-                        @include triangle(top, $color--white, 8px);
+                        @include mixins.triangle(
+                            top,
+                            variables.$color--white,
+                            8px
+                        );
                         inset-block-start: -21px;
                     }
 
                     &::before {
-                        @include triangle(top, $color--mid-grey, 8px);
+                        @include mixins.triangle(
+                            top,
+                            variables.$color--mid-grey,
+                            8px
+                        );
                     }
                 }
             }
@@ -55,38 +66,33 @@
         }
 
         &.no-response {
-            color: $color--black-20;
+            color: variables.$color--black-20;
         }
 
         .yes {
-            color: $color--green;
+            color: variables.$color--green;
         }
 
         .maybe {
-            color: $color--mustard;
+            color: variables.$color--mustard;
         }
 
         .no {
-            color: $color--tomato;
+            color: variables.$color--tomato;
         }
     }
 
-    &__date {
-        @include font-size(milli);
-    }
-
     &__no-reviews {
-        color: $color--mid-grey;
+        color: variables.$color--mid-grey;
     }
 
     &__name {
         position: relative;
-        z-index: 1;
         display: flex;
         align-items: center;
         overflow: hidden;
         text-overflow: ellipsis;
-        background: $color--white;
+        background: variables.$color--white;
 
         &:hover {
             display: inline-flex;
@@ -102,11 +108,11 @@
         position: relative;
 
         &.agree {
-            color: $color--green;
+            color: variables.$color--green;
         }
 
         &.disagree {
-            color: $color--tomato;
+            color: variables.$color--tomato;
         }
     }
 

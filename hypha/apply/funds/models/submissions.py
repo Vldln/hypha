@@ -1,4 +1,3 @@
-import json
 import operator
 from functools import partialmethod, reduce
 from typing import Optional, Self
@@ -28,6 +27,7 @@ from django.db.models.functions import Cast
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import strip_tags
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_fsm import RETURN_VALUE, FSMField, can_proceed, transition
@@ -46,7 +46,9 @@ from hypha.apply.funds.services import (
 from hypha.apply.review.options import AGREE
 from hypha.apply.stream_forms.files import StreamFieldDataEncoder
 from hypha.apply.stream_forms.models import BaseStreamForm
-from hypha.apply.users.groups import APPLICANT_GROUP_NAME
+from hypha.apply.todo.options import SUBMISSION_DRAFT
+from hypha.apply.todo.views import remove_tasks_for_user
+from hypha.apply.users.roles import APPLICANT_GROUP_NAME
 
 from ..blocks import NAMED_BLOCKS, ApplicationCustomFormFieldsBlock
 from ..workflow import (
@@ -284,7 +286,7 @@ def transition_id(target, phase):
 class AddTransitions(models.base.ModelBase):
     def __new__(cls, name, bases, attrs, **kwargs):
         for workflow in WORKFLOWS.values():
-            for phase, data in workflow.items():
+            for phase_name, data in workflow.items():
                 for transition_name, action in data.transitions.items():
                     method_name = transition_id(transition_name, data)
                     permission_name = method_name + "_permission"
@@ -303,10 +305,11 @@ class AddTransitions(models.base.ModelBase):
                     # Wrap with transition decorator
                     transition_func = transition(
                         attrs["status"],
-                        source=phase,
+                        source=phase_name,
                         target=transition_name,
                         permission=permission_func,
                         conditions=conditions,
+                        custom=action.get("custom", {}),
                     )(transition_state)
 
                     # Attach to new class
@@ -410,6 +413,9 @@ class ApplicationSubmission(
 ):
     form_data = models.JSONField(encoder=StreamFieldDataEncoder)
     form_fields = StreamField(ApplicationCustomFormFieldsBlock(), use_json_field=True)
+    public_id = models.CharField(
+        max_length=255, null=True, blank=True, unique=True, db_index=True
+    )
     summary = models.TextField(default="", null=True, blank=True)
     page = models.ForeignKey("wagtailcore.Page", on_delete=models.PROTECT)
     round = models.ForeignKey(
@@ -506,6 +512,18 @@ class ApplicationSubmission(
     @property
     def is_draft(self):
         return self.status == DRAFT_STATE
+
+    @property
+    def title_text_display(self):
+        """Return the title text for display across the site.
+
+        Use SUBMISSION_TITLE_TEXT_TEMPLATE setting to change format.
+        """
+        ctx = {
+            "title": self.title,
+            "public_id": self.public_id or self.id,
+        }
+        return strip_tags(settings.SUBMISSION_TITLE_TEXT_TEMPLATE.format(**ctx))
 
     def not_progressed(self):
         return not self.next
@@ -611,6 +629,7 @@ class ApplicationSubmission(
         prev_meta_terms = submission_in_db.meta_terms.all()
 
         self.id = None
+        self.public_id = None
         proposal_form = kwargs.get("proposal_form")
         proposal_form = int(proposal_form) if proposal_form else 0
         self.form_fields = self.get_from_parent("get_defined_fields")(
@@ -754,10 +773,15 @@ class ApplicationSubmission(
 
         super().save(*args, **kwargs)
 
-        # TODO: This functionality should be extracted and moved to a seperate function, too hidden here
+        # TODO: This functionality should be extracted and moved to a separate function, too hidden here
         if creating:
             AssignedReviewers = apps.get_model("funds", "AssignedReviewers")
             ApplicationRevision = apps.get_model("funds", "ApplicationRevision")
+
+            if not self.public_id:
+                self.public_id = (
+                    f"{self.get_from_parent('submission_id_prefix')}{self.id}"
+                )
 
             self.process_file_data(files)
             AssignedReviewers.objects.bulk_create_reviewers(
@@ -861,13 +885,14 @@ class ApplicationSubmission(
         values = self.get_searchable_contents()
 
         # Add named fields into the search index
-        for field in ["full_name", "email", "title"]:
-            values.append(getattr(self, field))
+        for field in ["full_name", "email", "title", "public_id"]:
+            if value := getattr(self, field):
+                values.append(value)
         return values
 
     def index_components(self):
         return {
-            "A": " ".join([f"id:{self.id}", self.title]),
+            "A": " ".join([f"id:{self.public_id or self.id}", self.title]),
             "C": " ".join([self.full_name, self.email]),
             "B": " ".join(self.get_searchable_contents()),
         }
@@ -882,7 +907,7 @@ class ApplicationSubmission(
         return reverse("funds:submissions:detail", args=(self.id,))
 
     def __str__(self):
-        return f"{self.title} from {self.full_name} for {self.page.title}"
+        return f"{self.title_text_display} from {self.full_name} for {self.page.title}"
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.user}, {self.round}, {self.page}>"
@@ -941,51 +966,14 @@ class ApplicationSubmission(
     def _get_REQUIRED_value(self, name):
         return self.data(name)
 
-    @property
-    def has_default_screening_status_set(self):
-        return self.screening_statuses.filter(default=True).exists()
+    def get_current_screening_status(self):
+        return self.screening_statuses.first()
 
-    @property
-    def has_yes_default_screening_status_set(self):
-        return self.screening_statuses.filter(default=True, yes=True).exists()
+    def get_yes_screening_status(self):
+        return self.screening_statuses.filter(yes=True).exists()
 
-    @property
-    def has_no_default_screening_status_set(self):
-        return self.screening_statuses.filter(default=True, yes=False).exists()
-
-    @property
-    def can_not_edit_default(self):
-        return self.screening_statuses.all().count() > 1
-
-    @property
-    def joined_screening_statuses(self):
-        return ", ".join([s.title for s in self.screening_statuses.all()])
-
-    @property
-    def yes_screening_statuses(self):
-        ScreeningStatus = apps.get_model("funds", "ScreeningStatus")
-        return json.dumps(
-            {
-                status.title: status.id
-                for status in ScreeningStatus.objects.filter(yes=True)
-            }
-        )
-
-    @property
-    def no_screening_statuses(self):
-        ScreeningStatus = apps.get_model("funds", "ScreeningStatus")
-        return json.dumps(
-            {
-                status.title: status.id
-                for status in ScreeningStatus.objects.filter(yes=False)
-            }
-        )
-
-    @property
-    def supports_default_screening(self):
-        if self.screening_statuses.exists():
-            return self.screening_statuses.filter(default=True).exists()
-        return True
+    def get_no_screening_status(self):
+        return self.screening_statuses.filter(yes=False).first()
 
 
 @receiver(post_transition, sender=ApplicationSubmission)
@@ -999,6 +987,9 @@ def log_status_update(sender, **kwargs):
 
     if request and notify:
         if kwargs["source"] == DRAFT_STATE:
+            # remove task from applicant dashboard for this instance
+            remove_tasks_for_user(code=SUBMISSION_DRAFT, user=by, related_obj=instance)
+            # notify for a new submission
             messenger(
                 MESSAGES.NEW_SUBMISSION,
                 request=request,

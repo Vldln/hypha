@@ -1,5 +1,3 @@
-from urllib import parse
-
 from django import forms
 from django.conf import settings
 from django.contrib import messages
@@ -217,7 +215,7 @@ class BatchDeterminationCreateView(BaseStreamForm, CreateView):
                 messages.warning(
                     self.request,
                     'Unable to determine submission "{title}" as already determined'.format(
-                        title=submission.title
+                        title=submission.title_text_display
                     ),
                 )
             else:
@@ -262,7 +260,7 @@ class BatchDeterminationCreateView(BaseStreamForm, CreateView):
                         "A determination already exists for the following submissions and they have been excluded: {submissions}"
                     ).format(
                         submissions=", ".join(
-                            [submission.title for submission in excluded]
+                            [submission.title_text_display for submission in excluded]
                         ),
                     ),
                 )
@@ -277,8 +275,6 @@ class BatchDeterminationCreateView(BaseStreamForm, CreateView):
                 + action
                 + "&submissions="
                 + ",".join([str(submission.id) for submission in submissions])
-                + "&next="
-                + parse.quote_plus(request.get_full_path()),
             )
         elif set(actions) != non_determine_states:
             raise ValueError("Inconsistent states provided - please talk to an admin")

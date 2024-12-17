@@ -64,9 +64,9 @@ The age of session cookies, in seconds.
 
 This determines the length of time for which the user will remain logged in. The default value is 12 hours.
 
-    SSESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", 60 * 60 * 12)
+    SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", 60 * 60 * 12)
 
-The age of session cookies when users check "Remember me" etc., in seconds. The default value is 2 weeks.
+The age of session cookies when users login with OAuth or check "Remember me" etc., in seconds. The default value is 2 weeks.
 
     SESSION_COOKIE_AGE_LONG = env.int("SESSION_COOKIE_AGE_LONG", 60 * 60 * 24 * 7 * 2)
 
@@ -175,6 +175,18 @@ Staff e-mail domain. Used for OAUTH2 whitelist default value and staff account c
 
 ----
 
+Should staff identities be obscured from Applicants & Partners (ie. comments will be ORG_LONG_NAME rather than "John Doe").
+
+   HIDE_STAFF_IDENTITY = env.bool('HIDE_STAFF_IDENTITY', False)
+
+----
+
+Should Applicant identities be obscured from External Reviewers
+
+    HIDE_IDENTITY_FROM_REVIEWERS = env.bool('HIDE_IDENTITY_FROM_REVIEWERS', False)
+
+----
+
 Should staff be able to access/see draft submissions.
 
     SUBMISSIONS_DRAFT_ACCESS_STAFF = env.bool('SUBMISSIONS_DRAFT_ACCESS_STAFF', False)
@@ -189,13 +201,13 @@ Should staff admins be able to access/see draft submissions.
 
 Should staff be able to export submissions.
 
-    SUBMISSIONS_EXPORT_ACCESS_STAFF = env.bool('SUBMISSIONS_EXPORT_ACCESS_STAFF', True)
+    SUBMISSIONS_EXPORT_ACCESS_STAFF = env.bool('SUBMISSIONS_EXPORT_ACCESS_STAFF', False)
 
 ----
 
 Should staff admins be able to export submissions.
 
-    SUBMISSIONS_EXPORT_ACCESS_STAFF_ADMIN = env.bool('SUBMISSIONS_EXPORT_ACCESS_STAFF_ADMIN', True)
+    SUBMISSIONS_EXPORT_ACCESS_STAFF_ADMIN = env.bool('SUBMISSIONS_EXPORT_ACCESS_STAFF_ADMIN', False)
 
 ----
 
@@ -232,6 +244,16 @@ Secure cookies
 Set this to enable Djangos settings for secure cookies.
 
     COOKIE_SECURE = env.bool('COOKIE_SECURE', False)
+
+----
+
+Machine translation settings for applications
+
+See [here](machine-translations.md) for more information on setting up machine translations
+
+    APPLICATION_TRANSLATIONS_ENABLED = env.bool("APPLICATION_TRANSLATIONS_ENABLED", False)
+
+----
 
 ## Slack settings
 

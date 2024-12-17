@@ -240,10 +240,13 @@ class Activity(models.Model):
         ordering = ["-timestamp"]
         base_manager_name = "objects"
 
+    def get_absolute_url(self):
+        return f"{self.source.get_absolute_url()}#communications--{self.id}"
+
     @property
     def priviledged(self):
         # Not visible to applicant
-        return self.visibility not in [APPLICANT, ALL]
+        return self.visibility not in [APPLICANT, PARTNER, APPLICANT_PARTNERS, ALL]
 
     @property
     def private(self):

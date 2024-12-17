@@ -1,70 +1,67 @@
-(function ($) {
-    "use strict";
+(function () {
+  let wordCountInterval;
 
-    var word_count_interval;
+  const WARNING_THRESHOLD = 0.8;
 
-    const observer_options = {
-        childList: true,
-    };
+  /**
+   * Count words and manage warning states for an element
+   * @param {HTMLElement} element - Target element to process
+   */
+  function updateWordCount(element) {
+    const currentCount = parseInt(element.innerText.match(/\d+/)?.[0], 10) || 0;
+    const limit = parseInt(
+      element.closest("div[data-word-limit]").dataset.wordLimit,
+      10
+    );
+    const warningThreshold = limit * WARNING_THRESHOLD;
 
-    function word_count(el) {
-        let word_count;
-        try {
-            word_count = parseInt(el.innerText.match(/\d+/)[0], 10);
-        } catch (e) {
-            word_count = 0;
-        }
-        const word_limit = parseInt(
-            $(el).parents().eq(4).attr("data-word-limit"),
-            10
-        );
-        const percent_to_get = 20;
-        const word_limit_to_show_warning =
-            word_limit - (percent_to_get / 100) * word_limit;
-
-        if (word_count <= word_limit_to_show_warning) {
-            el.setAttribute("data-after-word-count", " out of " + word_limit);
-            el.classList.remove("word-count-warning");
-            el.classList.remove("word-count-warning-2");
-        } else if (
-            word_count > word_limit_to_show_warning &&
-            word_count <= word_limit
-        ) {
-            el.setAttribute(
-                "data-after-word-count",
-                " out of " + word_limit + " (Close to the limit)"
-            );
-            el.classList.remove("word-count-warning-2");
-            el.classList.add("word-count-warning");
-        } else if (word_count > word_limit) {
-            el.setAttribute(
-                "data-after-word-count",
-                " out of " + word_limit + " (Over the limit)"
-            );
-            el.classList.add("word-count-warning-2");
-        }
+    /**
+     * Clear warning states and classes
+     */
+    function clearWarnings() {
+      delete element.dataset.afterWordCount;
+      element.classList.remove("word-count-warning", "word-count-warning-2");
     }
 
-    const observer = new MutationObserver(function (mutations) {
-        mutations.forEach((mutation) => {
-            word_count(mutation.target);
-        });
-    });
-
-    function word_count_alert() {
-        const word_counts = document.querySelectorAll(
-            ".tox-statusbar__wordcount"
-        );
-        if (word_counts.length > 0) {
-            clearInterval(word_count_interval);
-        }
-        word_counts.forEach((el) => {
-            // Run first to set all word count values on initial form.
-            word_count(el);
-            // Then observe for changes.
-            observer.observe(el, observer_options);
-        });
+    if (element.textContent.includes("characters")) {
+      clearWarnings();
+      return;
     }
 
-    word_count_interval = setInterval(word_count_alert, 300);
-})(jQuery);
+    element.dataset.afterWordCount = ` out of ${limit}`;
+
+    if (currentCount <= warningThreshold) {
+      clearWarnings();
+    } else if (currentCount <= limit) {
+      element.dataset.afterWordCount += " (Close to the limit)";
+      element.classList.remove("word-count-warning-2");
+      element.classList.add("word-count-warning");
+    } else {
+      element.dataset.afterWordCount += " (Over the limit)";
+      element.classList.add("word-count-warning-2");
+    }
+  }
+
+  const observer = new MutationObserver((mutations) =>
+    mutations.forEach((mutation) => updateWordCount(mutation.target))
+  );
+
+  /**
+   * Initialize word count tracking for matching elements
+   */
+  function initializeWordCount() {
+    const elements = document.querySelectorAll(".tox-statusbar__wordcount");
+
+    if (elements.length) {
+      clearInterval(wordCountInterval);
+      elements.forEach((element) => {
+        updateWordCount(element);
+        observer.observe(element, {
+          childList: true,
+        });
+      });
+    }
+  }
+
+  wordCountInterval = setInterval(initializeWordCount, 300);
+})();

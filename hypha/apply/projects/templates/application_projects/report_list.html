@@ -9,12 +9,15 @@
 
     {% adminbar %}
         {% slot header %}{% trans "Submitted Reports" %} ({{ table.rows|length }}){% endslot %}
-        {% slot sub_heading %}{% trans "View and filter all Submitted Reports" %}{% endslot %}
+        {% slot sub_heading %}
+            {% trans "View and filter all Submitted Reports" %} •
+            <a href="{% url 'apply:projects:reports:all' %}" class="text-blue-300 hover:underline">View all reports</a>
+        {% endslot %}
     {% endadminbar %}
 
     <div class="wrapper wrapper--large wrapper--inner-space-medium">
         {% if table %}
-            {% include "funds/includes/table_filter_and_search.html" with filter_form=filter_form use_search=False filter_action=filter_action filter_classes="filters--dates" %}
+            {% include "funds/includes/table_filter_and_search.html" with filter_form=filter_form filter_action=filter_action filter_classes="filters-open filters--dates" %}
             {% render_table table %}
         {% else %}
             <p>{% trans "No Reports Available." %}</p>

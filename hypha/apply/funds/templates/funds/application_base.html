@@ -4,7 +4,7 @@
 
 {% block content %}
 
-    <div class="wrapper wrapper--light-grey-bg wrapper--form wrapper--sidebar">
+    <div class="wrapper wrapper--default-bg wrapper--form wrapper--sidebar">
         <div class="wrapper--sidebar--inner">
 
             {% if page.end_date and page.get_parent.specific.show_deadline %}
@@ -34,7 +34,7 @@
                 <h3>{% blocktrans %}Sorry this {{ page|verbose_name }} is not accepting applications at the moment{% endblocktrans %}</h3>
             {% else%}
                 {% if page.get_parent.specific.guide_link %}
-                    <a href="{{ page.get_parent.specific.guide_link }}" class="link link--fixed-apply" target="_blank" rel="noopener noreferrer">
+                    <a href="{{ page.get_parent.specific.guide_link }}" class="print:hidden" target="_blank" rel="noopener noreferrer">
                         {% trans "Application guide" %}
                     </a>
                 {% endif %}
@@ -88,7 +88,6 @@
 
 {% block extra_js %}
     <script src="{% static 'js/application-form.js' %}"></script>
-    <script src="{% static 'js/file-uploads.js' %}"></script>
     <script src="{% static 'js/tinymce-word-count.js' %}"></script>
     <script src="{% static 'js/submission-form-copy.js' %}"></script>
     <script src="{% static 'js/application-form-links-new-window.js' %}"></script>

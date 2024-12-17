@@ -11,6 +11,8 @@ def global_vars(request):
         "ORG_EMAIL": settings.ORG_EMAIL,
         "ORG_GUIDE_URL": settings.ORG_GUIDE_URL,
         "ORG_URL": settings.ORG_URL,
+        "HIDE_STAFF_IDENTITY": settings.HIDE_STAFF_IDENTITY,
+        "HIDE_IDENTITY_FROM_REVIEWERS": settings.HIDE_IDENTITY_FROM_REVIEWERS,
         "GOOGLE_OAUTH2": settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY,
         "ENABLE_PUBLIC_SIGNUP": settings.ENABLE_PUBLIC_SIGNUP,
         "ENABLE_GOOGLE_TRANSLATE": settings.ENABLE_GOOGLE_TRANSLATE,
@@ -19,4 +21,5 @@ def global_vars(request):
         "SENTRY_DENY_URLS": settings.SENTRY_DENY_URLS,
         "SENTRY_DEBUG": settings.SENTRY_DEBUG,
         "SENTRY_PUBLIC_KEY": settings.SENTRY_PUBLIC_KEY,
+        "SUBMISSIONS_TABLE_EXCLUDED_FIELDS": settings.SUBMISSIONS_TABLE_EXCLUDED_FIELDS,
     }

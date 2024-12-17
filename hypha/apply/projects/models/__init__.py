@@ -9,18 +9,19 @@ from .project import (
     PAFApprovals,
     Project,
     ProjectForm,
+    ProjectReminderFrequency,
     ProjectReportForm,
     ProjectSettings,
     ProjectSOWForm,
 )
 from .report import Report, ReportConfig, ReportPrivateFiles, ReportVersion
-from .vendor import BankInformation, DueDiligenceDocument, Vendor, VendorFormSettings
 
 __all__ = [
     "Project",
     "ProjectForm",
     "ProjectReportForm",
     "ProjectSOWForm",
+    "ProjectReminderFrequency",
     "ProjectSettings",
     "PAFApprovals",
     "Contract",
@@ -32,10 +33,6 @@ __all__ = [
     "ReportVersion",
     "ReportPrivateFiles",
     "ReportConfig",
-    "Vendor",
-    "VendorFormSettings",
-    "BankInformation",
-    "DueDiligenceDocument",
     "Invoice",
     "SupportingDocument",
     "Deliverable",

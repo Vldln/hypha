@@ -2,13 +2,13 @@
 {% wagtail_site as current_site %}
 {% get_current_language as LANGUAGE_CODE %}
 {% get_current_language_bidi as LANGUAGE_BIDI %}
-<html class="no-js h-full" lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<html class="h-full no-js" lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
     <head>
         {# TODO fallbacks if page is not defined e.g. for 404 page #}
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width">
         <title>{% block title_prefix %}{% if current_site.site_name %}{{ current_site.site_name }} | {% endif %}{% endblock %}{% block title %}{% if page.seo_title %}{{ page.seo_title }}{% else %}{{ page.title }}{% endif %}{% endblock %}{% block title_suffix %}{{ TITLE_SUFFIX }}{% endblock %}</title>
-        <meta name="description" content="{% if page.search_description %}{{ page.search_description }}{% else %}{{ page.listing_summary }}{% endif %}">
+        <meta name="description" content="{% block meta_description %}{% if page.search_description %}{{ page.search_description }}{% else %}{{ page.listing_summary }}{% endif %}{% endblock %}">
 
         <!-- favicons -->
         {% comment %}
@@ -35,44 +35,35 @@
         <!-- htmx start: installed with npm -->
         <script src="{% static 'js/vendor/htmx.min.js' %}"></script>
         <script src="{% static 'js/vendor/htmx-ext-multi-swap.min.js' %}"></script>
-        {% comment %} <script src="{% static 'js/vendor/htmx-ext-alpine-morph.min.js' %}" defer></script> {% endcomment %}
-        <script src="{% static 'js/vendor/nprogress-2.0.0.min.js' %}" defer></script>
-        <script>
-            window.addEventListener('DOMContentLoaded', (event) => {
-                document.addEventListener("htmx:beforeRequest", function() { NProgress.start(); });
-                document.addEventListener("htmx:afterRequest", function() { NProgress.done(); });
-            });
-            {% comment %}
-            If the htmx response is either 403, 404, or 500, display the error page.
-            Please note that the error replaces the entire page, rather than displaying
-            the error response in the target element.
-            https://stackoverflow.com/a/74823597/782901
-            {% endcomment %}
-            document.addEventListener("htmx:beforeOnLoad", function (event) {
-                const xhr = event.detail.xhr
-                if (xhr.status == 500 || xhr.status == 403 || xhr.status == 404) {
-                    event.stopPropagation() // Tell htmx not to process these requests
-                    document.children[0].innerHTML = xhr.response // Swap in body of response instead
-                }
-            });
-        </script>
+        <script defer src="{% static 'js/vendor/nprogress-2.0.0.min.js' %}"></script>
         <!-- htmx end -->
 
-        <script src="{% static 'js/jquery.min.js' %}"></script>
-        <script src="{% static 'js/js.cookie.min.js' %}"></script>
+        <!-- Cookieconsent -->
+        <script defer src="{% static 'js/cookieconsent.js' %}"></script>
 
-        <!-- alpine js start -->
+        <!-- Tooltips -->
+        <script defer src="{% static 'js/tooltips/popper.min.js' %}"></script>
+        <script defer src="{% static 'js/tooltips/tippy.min.js' %}"></script>
+
+        <!-- alpine.js start -->
         <style> [x-cloak] {display: none !important} </style>
+
         <!-- Alpine Plugins: installed with npm -->
         <script defer src="{% static 'js/vendor/alpine-focus.min.js' %}"></script>
+        {% block alpine_scripts %}{% endblock %}
 
         <!-- Alpine Core: installed with npm  -->
         <script defer src="{% static 'js/vendor/alpine.min.js' %}"></script>
         <!-- alpine.js end -->
 
-        <!-- modules -->
+        <!-- Modules for supporting <relative-time> and <filter-input> elements -->
         <script type="module" src="{% static 'js/esm/github-relative-time-element-4-3-0.js' %}"></script>
         <script type="module" src="{% static 'js/esm/github-filter-input-element-0-1-1.js' %}"></script>
+
+        <!-- We still need jQuery for select2, daterangepicker and a few custom scripts. -->
+        <!-- Please do not add new features that require jQuery! -->
+        <script src="{% static 'js/vendor/jquery.min.js' %}"></script>
+
         {% include "includes/head_end.html" %}
     </head>
 
@@ -90,7 +81,7 @@
         {% block header %}{% endblock header %}
 
         {% block content_wrapper %}
-            <main class="wrapper wrapper--large wrapper--main grow" id="main">
+            <main class="wrapper wrapper--large wrapper--main grow" id="main" x-data="{ showSubmission: false }">
                 {% block content %}{% endblock %}
             </main>
         {% endblock %}
@@ -103,21 +94,36 @@
 
         {% cookie_banner %}
 
-        <script src="{% static 'js/main.js' %}"></script>
-        <script src="{% static 'js/cookieconsent.js' %}"></script>
-        <!-- Tooltips -->
-        <script src="{% static 'js/tooltips/popper.min.js' %}"></script>
-        <script src="{% static 'js/tooltips/tippy.min.js' %}"></script>
+        <!-- htmx progress, error handeling and tooltip loading -->
         <script>
+            window.addEventListener('DOMContentLoaded', () => {
+                document.addEventListener("htmx:beforeRequest", function() { NProgress.start(); });
+                document.addEventListener("htmx:afterRequest", function() { NProgress.done(); });
+            });
+
+            {% comment %}
+            If the htmx response is either 403, 404, or 500, display the error page.
+            Please note that the error replaces the entire page, rather than displaying
+            the error response in the target element.
+            https://stackoverflow.com/a/74823597/782901
+            {% endcomment %}
+            document.addEventListener("htmx:beforeOnLoad", function (event) {
+                const xhr = event.detail.xhr
+                if (xhr.status == 500 || xhr.status == 403 || xhr.status == 404) {
+                    event.stopPropagation() // Tell htmx not to process these requests
+                    document.children[0].innerHTML = xhr.response // Swap in body of response instead
+                }
+            });
+
             htmx.onLoad(function() {
                 tippy('[data-tippy-content]');
             });
         </script>
-        <!-- Tooltips end -->
+        <!-- htmx end -->
 
-        <!-- Datetime picker-->
-        <script src="{% static 'js/vendor/moment.min.js' %}"></script>
-        <script src="{% static 'js/vendor/daterangepicker.min.js' %}"></script>
+        <!-- Placeholder for the htmx modal & toast-->
+        {% include "includes/_modal-placeholder.html" %}
+        {% include "includes/_toast-placeholder.html" %}
 
         {% block extra_js %}{% endblock %}
 

@@ -17,6 +17,19 @@ class SystemSettings(BaseGenericSetting):
         verbose_name = "System settings"
         db_table = "system_settings"
 
+    home_title = models.CharField(
+        _("Title"),
+        max_length=255,
+        default="",
+        help_text=_("The title to be displayed on the homepage."),
+    )
+
+    home_strapline = RichTextField(
+        _("Strapline"),
+        default="",
+        help_text=_("The strapline to be displayed on the homepage."),
+    )
+
     site_logo_default = models.ForeignKey(
         "images.CustomImage",
         null=True,
@@ -53,7 +66,7 @@ class SystemSettings(BaseGenericSetting):
 
     footer_content = models.TextField(
         "Footer content",
-        default="<p>Configure this text in Wagtail admin -> Settings -> System settings.</p>",
+        default='<p>Configure this text in Wagtail admin -> Settings -> System settings.</p>\n<br>\n<a href="#" onclick="openConsentPrompt()">Cookie Settings</a>',
         help_text=_("This will be added to the footer, html tags is allowed."),
         blank=True,
     )
@@ -79,6 +92,13 @@ class SystemSettings(BaseGenericSetting):
     )
 
     panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("home_title"),
+                FieldPanel("home_strapline"),
+            ],
+            "Homepage",
+        ),
         MultiFieldPanel(
             [
                 FieldPanel("site_logo_default"),

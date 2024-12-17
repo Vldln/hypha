@@ -1,0 +1,88 @@
+{% load i18n heroicons %}
+
+{% if request.user.is_authenticated %}
+    <div x-data="{ show: false }" x-on:keydown.escape="show = false" class="relative flex">
+        <button
+            x-on:click="show = ! show"
+            class="font-bold flex items-center transition-all rounded-sm px-1.5 group"
+            type="button"
+            :class="show ? 'bg-gray-900 text-white' : 'hover:bg-slate-200'"
+        >
+            {% heroicon_micro "user-circle" class="inline group-hover:scale-110 transition-transform align-text-bottom w-8 h-8 md:me-1" aria_hidden=true %}
+            <span class="hidden md:inline-block truncate max-w-36">{{ request.user }}</span>
+        </button>
+
+        <!-- panel -->
+        <div
+            x-cloak
+            x-show="show"
+            x-trap.noautofocus="show"
+            x-transition
+            x-transition.origin.top
+            @click.outside="show = false"
+            class="min-w-48 absolute block bg-white shadow-xl z-[100000] border-y rounded-sm end-0 top-10"
+        >
+            <a
+                href="{% url 'users:account' %}"
+                title="Goto your account"
+                class="px-3 py-2 text-black flex items-center gap-2
+                       focus-visible:outline-dashed outline-1 transition-colors border-x
+                       hover:bg-slate-100 hover:text-dark-blue hover:font-semibold group"
+            >
+                {% heroicon_outline "user" size=18 class="stroke-gray-500 inline group-hover:scale-110 group-hover:stroke-2 group-hover:stroke-dark-blue transition-transform" aria_hidden=true %}
+                {% trans 'My account' %}
+            </a>
+            {% if request.user.is_apply_staff %}
+                <a
+                    href="{% url 'activity:notifications' %}"
+                    title="Check latest notifications"
+                    class="px-3 py-2 text-black flex items-center gap-2
+                           focus-visible:outline-dashed outline-1 transition-colors border-x
+                           hover:bg-slate-100 hover:text-dark-blue hover:font-semibold group"
+                >
+                    {% heroicon_outline "bolt" size=18 class="stroke-gray-500 inline group-hover:scale-110 group-hover:stroke-2 group-hover:stroke-dark-blue transition-transform" aria_hidden=true %}
+                    {% trans "Activity feed" %}
+                </a>
+                <a
+                    href="{% url "apply:submissions:list" %}?query=flagged:@me"
+                    title="Goto your flagged submissions"
+                    class="px-3 py-2 text-black flex items-center gap-2
+                           focus-visible:outline-dashed outline-1 transition-colors border-r
+                           hover:bg-slate-100 hover:text-dark-blue hover:font-semibold group"
+                >
+                    {% heroicon_outline "flag" size=18 class="stroke-gray-500 inline group-hover:scale-110 group-hover:stroke-2 group-hover:stroke-dark-blue transition-transform" aria_hidden=true %}
+                    {% trans "My flagged" %}
+                </a>
+                {% if perms.wagtailadmin.access_admin %}
+                    <a
+                        href="{% url 'wagtailadmin_home' %}"
+                        title="Goto wagtail admin"
+                        class="px-3 py-2 text-black flex items-center gap-2
+                               focus-visible:outline-dashed outline-1 transition-colors border-x
+                               hover:bg-slate-100 hover:text-dark-blue hover:font-semibold group"
+                    >
+                        {% heroicon_outline "cog-6-tooth" size=18 class="stroke-gray-500 inline group-hover:scale-110 group-hover:stroke-2 group-hover:stroke-dark-blue transition-transform" aria_hidden=true %}
+                        {% trans "Administration" %}
+                    </a>
+                {% endif %}
+            {% endif %}
+            <a
+                href="{% url 'users:logout' %}"
+                title="Log out"
+                class="px-3 py-2 block focus-visible:outline-dashed
+                       outline-1 transition-all border-x border-t text-center font-semibold text-red-600
+                       hover:bg-red-100 hover:text-red-900 hover:font-semibold"
+            >
+                {% trans "Log out" %}
+            </a>
+        </div>
+    </div>
+{% else %}
+    <a
+        class="button button--transparent button--narrow"
+        href="{{ APPLY_SITE.root_url }}{% url 'users:passwordless_login_signup' %}{% if redirect_url %}?next={{ redirect_url }}{% endif %}"
+    >
+        {% heroicon_micro "user" class="inline align-text-bottom w-4 h-4 me-1" aria_hidden=true %}
+        {% trans "Log in" %} {% if ENABLE_PUBLIC_SIGNUP %} {% trans " or Sign up" %} {% endif %}
+    </a>
+{% endif %}

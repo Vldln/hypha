@@ -5,6 +5,7 @@ Hypha project base settings.
 import os
 
 import dj_database_url
+import djp
 from environs import Env
 
 from .django import *  # noqa
@@ -62,6 +63,11 @@ SUBMISSIONS_ARCHIVED_VIEW_ACCESS_STAFF_ADMIN = env.bool(
     "SUBMISSIONS_ARCHIVED_ACCESS_STAFF_ADMIN", True
 )
 
+# Possible values are: "public_id" and "title"
+SUBMISSION_TITLE_TEXT_TEMPLATE = env(
+    "SUBMISSION_TITLE_TEMPLATE", default="{title} (#{public_id})"
+)
+
 # Provide permissions for archiving submissions
 SUBMISSIONS_ARCHIVED_ACCESS_STAFF = env.bool("SUBMISSIONS_ARCHIVED_ACCESS_STAFF", False)
 SUBMISSIONS_ARCHIVED_ACCESS_STAFF_ADMIN = env.bool(
@@ -115,6 +121,12 @@ ACTIVITY_DIGEST_RECIPIENT_EMAILS = env.list(
 # Staff e-mail domain. Used for OAUTH2 whitelist default value and staff account creation.
 STAFF_EMAIL_DOMAINS = env.list("STAFF_EMAIL_DOMAINS", [])
 
+# Should staff identities be obscured from Applicants & Partners (ie. comments will be ORG_LONG_NAME rather than John Doe).
+HIDE_STAFF_IDENTITY = env.bool("HIDE_STAFF_IDENTITY", False)
+
+# Should Applicant identities be obscured from External Reviewers
+HIDE_IDENTITY_FROM_REVIEWERS = env.bool("HIDE_IDENTITY_FROM_REVIEWERS", False)
+
 # Should staff be able to access/see draft submissions.
 SUBMISSIONS_DRAFT_ACCESS_STAFF = env.bool("SUBMISSIONS_DRAFT_ACCESS_STAFF", False)
 
@@ -124,7 +136,7 @@ SUBMISSIONS_DRAFT_ACCESS_STAFF_ADMIN = env.bool(
 )
 
 # Should staff be able to export submissions.
-SUBMISSIONS_EXPORT_ACCESS_STAFF = env.bool("SUBMISSIONS_EXPORT_ACCESS_STAFF", True)
+SUBMISSIONS_EXPORT_ACCESS_STAFF = env.bool("SUBMISSIONS_EXPORT_ACCESS_STAFF", False)
 
 # Should staff admins be able to export submissions.
 SUBMISSIONS_EXPORT_ACCESS_STAFF_ADMIN = env.bool(
@@ -171,8 +183,12 @@ DATABASES = {
 CONN_HEALTH_CHECKS = env.bool("CONN_HEALTH_CHECKS", True)
 
 # Language code in standard language id format: en, en-gb, en-us
-# The corrosponding locale dir is named: en, en_GB, en_US
+# The corresponding locale dir is named: en, en_GB, en_US
 LANGUAGE_CODE = env.str("LANGUAGE_CODE", "en")
+
+# Machine translation settings
+# NOTE: Ensure the packages in `requirements/translate.txt` have been installed!
+APPLICATION_TRANSLATIONS_ENABLED = env.bool("APPLICATION_TRANSLATIONS_ENABLED", False)
 
 # Number of seconds that password reset and account activation links are valid (default 259200, 3 days).
 PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT", 259200)
@@ -256,12 +272,6 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.db.DatabaseCache",
         "LOCATION": "database_cache",
     },
-    "wagtailcache": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "database_cache",
-        "KEY_PREFIX": "wagtailcache",
-        "TIMEOUT": CACHE_CONTROL_MAX_AGE,
-    },
 }
 
 # Use a more permanent cache for django-file-form.
@@ -295,7 +305,6 @@ MEDIA_URL = env.str("MEDIA_URL", "/media/")
 
 # Wagtail settings
 
-WAGTAIL_CACHE_TIMEOUT = CACHE_CONTROL_MAX_AGE
 WAGTAIL_FRONTEND_LOGIN_URL = "/auth/"
 WAGTAIL_SITE_NAME = "hypha"
 WAGTAILIMAGES_IMAGE_MODEL = "images.CustomImage"
@@ -334,8 +343,6 @@ WAGTAILSEARCH_BACKENDS = {
         "BACKEND": "wagtail.search.backends.database",
     },
 }
-
-WAGTAIL_CACHE_BACKEND = "wagtailcache"
 
 # Cloudflare cache invalidation.
 # See https://docs.wagtail.io/en/v2.8/reference/contrib/frontendcache.html
@@ -433,6 +440,7 @@ NH3_ALLOWED_ATTRIBUTES = {
         "target",
         "title",
         "width",
+        "data-tippy-content",
     ]
 }
 
@@ -571,8 +579,6 @@ INTACCT_USER_ID = env.str("INTACCT_USER_ID", "")
 INTACCT_COMPANY_ID = env.str("INTACCT_COMPANY_ID", "")
 INTACCT_USER_PASSWORD = env.str("INTACCT_USER_PASSWORD", "")
 
-# Finance extension to finance2 for Project Invoicing
-INVOICE_EXTENDED_WORKFLOW = env.bool("INVOICE_EXTENDED_WORKFLOW", True)
 
 
 # Misc settings
@@ -619,3 +625,6 @@ if SENTRY_DSN:
         debug=SENTRY_DEBUG,
         integrations=[DjangoIntegration()],
     )
+
+# Load settings from any djp plugins.
+djp.settings(globals())

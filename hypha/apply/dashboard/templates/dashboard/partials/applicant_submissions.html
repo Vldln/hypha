@@ -1,10 +1,16 @@
-{% load i18n dashboard_statusbar_tags statusbar_tags workflow_tags heroicons %}
+{% load i18n dashboard_statusbar_tags statusbar_tags workflow_tags heroicons submission_tags %}
+{% load can from permission_tags %}
 
 {% for submission in page.object_list %}
     <div class="wrapper wrapper--status-bar-outer">
         <div class="wrapper wrapper--status-bar-inner ms-4">
             <div class="mt-5 lg:max-w-[30%]">
-                <h4 class="heading mb-0 font-bold line-clamp-3 hover:line-clamp-none"><a class="link {% if not submission.is_active %} text-gray-400 {% endif %}" href="{% url 'funds:submissions:detail' submission.id %}">{{ submission.title }}</a></h4>
+                <h4 class="heading mb-0 font-bold line-clamp-3 hover:line-clamp-none">
+                    <a class="{% if not submission.is_active %} text-slate-500 {% endif %} hover:underline" href="{% url 'funds:submissions:detail' submission.id %}">
+                        {{ submission.title }}
+                        <span class="text-gray-400">#{{ submission.public_id|default:submission.id }}</span>
+                    </a>
+                </h4>
                 <p class="m-0 text-fg-muted mb-4 text-sm">
                     {% if submission.is_draft %}
                         {% trans "Drafted on " %}
@@ -21,6 +27,13 @@
                             {% heroicon_micro "pencil" class="w-4 h-4 me-1 inline align-middle" aria_hidden=true %}
                             {% trans "Edit" %}
                         {% endif %}
+                    </a>
+                {% endif %}
+                {% can "delete_submission" submission as can_delete_submission %}
+                {% if can_delete_submission %}
+                    <a class="button button--white" href="{% url 'funds:submissions:delete' submission.id %}" hx-get="{% url 'funds:submissions:delete' submission.id %}" hx-target="#htmx-modal">
+                        {% heroicon_micro "trash" class="inline me-1 mt-1 fill-red-600" aria_hidden=true %}
+                        {% trans "Delete" %}
                     </a>
                 {% endif %}
             </div>

@@ -1,3 +1,7 @@
+@use "sass:list";
+@use "functions";
+@use "variables";
+
 // stylelint-disable
 
 @use "sass:math";
@@ -5,9 +9,9 @@
 // Media queries
 @mixin media-query($queries...) {
     @each $query in $queries {
-        @each $breakpoint in $breakpoints {
-            $name: nth($breakpoint, 1);
-            $declaration: nth($breakpoint, 2);
+        @each $breakpoint in variables.$breakpoints {
+            $name: list.nth($breakpoint, 1);
+            $declaration: list.nth($breakpoint, 2);
 
             @if $query == $name and $declaration {
                 @media only screen and #{$declaration} {
@@ -18,75 +22,15 @@
     }
 }
 
-//   Placeholder text
-@mixin placeholder-text {
-    &.placeholder {
-        @content;
-    }
-    &:-moz-placeholder {
-        @content;
-    }
-    &::-moz-placeholder {
-        @content;
-    }
-    &:-ms-input-placeholder {
-        @content;
-    }
-    &::-webkit-input-placeholder {
-        @content;
-    }
-}
-
-// Hide text
-@mixin hidden {
-    position: absolute;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    height: 1px;
-    width: 1px;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-// Output a rem value for the given property
-@mixin rem($property, $values) {
-    $rem: ();
-
-    @each $value in $values {
-        @if $value == 0 or $value == auto or $value == inherit {
-            $rem: append($rem, $value);
-        } @else {
-            $rem: append($rem, rem(strip-unit($value)));
-        }
-    }
-    #{$property}: $rem;
-}
-
-// Output a `font-size: [x]rem;` declaration for the given px value
-@mixin rem-font-size($font-size) {
-    @include rem(font-size, $font-size);
-}
-
-// Font sizes
-@mixin font-size($keyword) {
-    $size: map-get($font-sizes, $keyword);
-
-    @if $size == null {
-        @warn 'Font size ‘#{$keyword}’ does not exist';
-    } @else {
-        @include rem-font-size($size);
-    }
-}
-
 // Button mixin
 @mixin button($bg, $hover-bg) {
     padding: 0.5em 2rem;
-    font-weight: $weight--bold;
-    color: $color--white;
+    font-weight: variables.$weight--bold;
+    color: variables.$color--white;
     text-align: center;
     background: $bg;
-    border: 1px solid $color--white;
-    transition: color, background, border, $transition;
+    border: 1px solid variables.$color--white;
+    transition: color, background, border, variables.$transition;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -105,8 +49,10 @@
     font-size: 15px;
     vertical-align: middle;
 
-    @include media-query(tablet-landscape) {
-        padding: 0.25rem 0.75rem;
+    @include media-query(lg) {
+        & {
+            padding: 0.25rem 0.75rem;
+        }
     }
 }
 
@@ -115,56 +61,50 @@
     padding: 2px;
     font-size: 12px;
 
-    @include media-query(tablet-landscape) {
-        padding: 3px 5px;
+    @include media-query(lg) {
+        & {
+            padding: 3px 5px;
+        }
     }
 }
 
 // Wide button mixin
 @mixin button--wide {
-    @include media-query(tablet-landscape) {
-        padding: 0.5em 80px;
+    @include media-query(lg) {
+        & {
+            padding: 0.5em 80px;
+        }
     }
 }
 
 // Viewport sized typography mixin that takes a min and max pixel-based value
 @mixin responsive-font-sizes($min, $max) {
-    $vw-context: (1260 * 0.1) * 1px;
-    $responsive: math.div($max, $vw-context) * 10vw;
+    $minbreakpoint: 640;
+    $maxbreakpoint: 1280;
+    $minsize: functions.strip-unit($min);
+    $maxsize: functions.strip-unit($max);
+    $minrem: functions.rem($min);
+    $maxrem: functions.rem($max);
+    $slope: math.div($maxsize - $minsize, $maxbreakpoint - $minbreakpoint);
+    $intersection: functions.rem($minsize - $slope * $minbreakpoint);
 
-    $responsive-unitless: math.div(
-        $responsive,
-        ($responsive - $responsive + 1)
-    );
-    $dimension: if(unit($responsive) == "vh", "height", "width");
-    $min-breakpoint: math.div($min, $responsive-unitless) * 100;
-
-    @media (max-#{$dimension}: #{$min-breakpoint}) {
-        font-size: $min;
-    }
-
-    $max-breakpoint: math.div($max, $responsive-unitless) * 100;
-
-    @media (min-#{$dimension}: #{$max-breakpoint}) {
-        font-size: $max;
-    }
-
-    font-size: $responsive;
+    font-size: clamp($minrem, calc($intersection + $slope * 100vw), $maxrem);
 }
 
 // Triangle mixin
 // @param {Direction} $direction - Triangle direction, either `top`, `right`, `bottom` or `left`
 // @param {Color} $color [currentcolor] - Triangle color
 // @param {Length} $size [1em] - Triangle size
-@mixin triangle($direction, $color: currentcolor, $size: 1em) {
-    @if not index(top right bottom left, $direction) {
+@mixin triangle($direction, $color: currentcolor, $size: 0.33rem) {
+    @if not list.index(top right bottom left, $direction) {
         @error 'Direction must be either `top`, `right`, `bottom` or `left`.';
     }
 
     width: 0;
     height: 0;
     content: "";
-    border-#{opposite-direction($direction)}: ($size * 1.5) solid $color;
+    border-#{functions.opposite-direction($direction)}: ($size * 1.5) solid
+        $color;
 
     $perpendicular-borders: $size solid transparent;
 
@@ -184,7 +124,7 @@
             &.desc,
             &.asc {
                 position: relative;
-                color: $color--dark-grey;
+                color: variables.$color--dark-grey;
 
                 &::after {
                     position: absolute;
@@ -199,13 +139,13 @@
 
             &.desc {
                 &::after {
-                    @include triangle(top, $color--default, 5px);
+                    @include triangle(top);
                 }
             }
 
             &.asc {
                 &::after {
-                    @include triangle(bottom, $color--default, 5px);
+                    @include triangle(bottom);
                 }
             }
         }

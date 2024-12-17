@@ -5,7 +5,7 @@
 
     {% adminbar %}
         {% slot back_link %}
-            <a class="simplified__projects-link" href="{{ object.get_absolute_url }}">
+            <a class="admin-bar__back-link" href="{{ object.get_absolute_url }}">
                 {% trans "View project page" %}
             </a>
         {% endslot %}
@@ -19,7 +19,7 @@
             {% include "forms/includes/form_errors.html" with form=sow_form %}
         {% endif %}
 
-        <div class="wrapper wrapper--light-grey-bg wrapper--sidebar pt-8 ps-20 pb-8 mt-4 mb-12 mx-auto ">
+        <div class="pt-8 pb-8 mx-auto mt-4 mb-12 wrapper wrapper--default-bg wrapper--sidebar ps-20 ">
             <div class="wrapper--sidebar--inner">
                 <form class="form application-form" action="" method="post" enctype="multipart/form-data">
                     {% csrf_token %}
@@ -72,7 +72,7 @@
                 </form>
             </div>
             <aside class="sidebar sidebar__project">
-                <div class="js-actions-sidebar sidebar__inner sidebar__inner--actions {% if mobile %}sidebar__inner--mobile{% endif %}">
+                <div class="sidebar__inner sidebar__inner--actions">
                     <h5>{% trans "Proposal attachments" %}</h5>
                     {% for file in submissions_attachments %}
                         <p><b><a href="{{ file.url }}" target="_blank">{{ file.filename }}</a></b></p>
@@ -82,7 +82,7 @@
         </div>
 
     {% else %}
-        <div class="wrapper wrapper--light-grey-bg wrapper--form wrapper--sidebar">
+        <div class="wrapper wrapper--default-bg wrapper--form wrapper--sidebar">
             <div class="wrapper--sidebar--inner">
                 <p>
                     {% trans "Project Form not configured. Please add an project form in the" %}
@@ -96,7 +96,6 @@
 {% endblock %}
 
 {% block extra_js %}
-    <script src="{% static 'js/file-uploads.js' %}"></script>
     <script src="{% static 'js/tinymce-word-count.js' %}"></script>
     <script src="{% static 'js/multi-input-fields.js' %}"></script>
     <script src="{% static 'js/application-form-links-new-window.js' %}"></script>

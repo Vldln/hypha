@@ -65,16 +65,14 @@ class MyFlaggedMixin:
 
         limit = 5
         return {
-            "table": UserFlaggedSubmissionsTable(
-                submissions[:limit],
-                prefix="my-flagged-",
-            ),
+            "submissions": submissions[:limit],
+            "count": submissions.count(),
             "display_more": submissions.count() > limit,
         }
 
 
 class AdminDashboardView(MyFlaggedMixin, TemplateView):
-    template_name = "dashboard/dashboard.html"
+    template_name = "dashboard/staff_dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -197,6 +195,7 @@ class AdminDashboardView(MyFlaggedMixin, TemplateView):
             .order_by("-end_date")
             .by_lead(self.request.user)
         )
+
         return {
             "closed": rounds.closed()[:limit],
             "open": rounds.open()[:limit],
@@ -248,10 +247,7 @@ class FinanceDashboardView(MyFlaggedMixin, TemplateView):
         }
 
     def active_invoices(self):
-        if self.request.user.is_finance_level_2:
-            invoices = Invoice.objects.for_finance_2()
-        else:
-            invoices = Invoice.objects.for_finance_1()
+        invoices = Invoice.objects.for_finance_1()
 
         return {
             "count": invoices.count(),
@@ -259,19 +255,11 @@ class FinanceDashboardView(MyFlaggedMixin, TemplateView):
         }
 
     def invoices_for_approval(self):
-        if self.request.user.is_finance_level_2:
-            invoices = Invoice.objects.approved_by_finance_1()
-        else:
-            invoices = Invoice.objects.approved_by_staff()
+        invoices = Invoice.objects.approved_by_staff()
 
         return {"count": invoices.count(), "table": InvoiceDashboardTable(invoices)}
 
     def invoices_to_convert(self):
-        if settings.INVOICE_EXTENDED_WORKFLOW and self.request.user.is_finance_level_1:
-            return {
-                "count": None,
-                "table": None,
-            }
         invoices = Invoice.objects.waiting_to_convert()
         return {
             "count": invoices.count(),
@@ -337,6 +325,7 @@ class ReviewerDashboardView(MyFlaggedMixin, MySubmissionContextMixin, TemplateVi
             "count": count,
             "display_more": count > limit,
             "table": ReviewerSubmissionsTable(submissions[:limit], prefix="my-review-"),
+            "url": reverse("funds:submissions:list"),
         }
 
     def my_reviewed(self, submissions):

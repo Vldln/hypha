@@ -1,20 +1,22 @@
 import logging
 from collections import defaultdict
+from typing import List
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.utils.translation import gettext as _
 
+from hypha.apply.activity.models import ALL, APPLICANT_PARTNERS, PARTNER
 from hypha.apply.projects.models.payment import CHANGES_REQUESTED_BY_STAFF, DECLINED
 from hypha.apply.projects.templatetags.project_tags import display_project_status
-from hypha.apply.users.groups import (
-    APPROVER_GROUP_NAME,
+from hypha.apply.users.models import User
+from hypha.apply.users.roles import (
     CONTRACTING_GROUP_NAME,
     FINANCE_GROUP_NAME,
     STAFF_GROUP_NAME,
 )
-from hypha.apply.users.models import User
 from hypha.core.mail import (
     language,
     remove_extra_empty_lines,
@@ -54,8 +56,7 @@ class EmailAdapter(AdapterBase):
         MESSAGES.PARTNERS_UPDATED_PARTNER: "partners_updated_partner",
         MESSAGES.UPLOAD_CONTRACT: "messages/email/contract_uploaded.html",
         MESSAGES.SUBMIT_CONTRACT_DOCUMENTS: "messages/email/submit_contract_documents.html",
-        MESSAGES.CREATED_PROJECT: "handle_project_created",
-        MESSAGES.UPDATED_VENDOR: "handle_vendor_updated",
+        MESSAGES.CREATED_PROJECT: "messages/email/project_created.html",
         MESSAGES.SENT_TO_COMPLIANCE: "messages/email/sent_to_compliance.html",
         MESSAGES.REQUEST_PROJECT_CHANGE: "messages/email/project_request_change.html",
         MESSAGES.ASSIGN_PAF_APPROVER: "messages/email/assign_paf_approvers.html",
@@ -74,9 +75,9 @@ class EmailAdapter(AdapterBase):
     def get_subject(self, message_type, source):
         if source and hasattr(source, "title"):
             if is_ready_for_review(message_type) or is_reviewer_update(message_type):
-                subject = _("Application ready to review: {source.title}").format(
-                    source=source
-                )
+                subject = _(
+                    "Application ready to review: {source.title_text_display}"
+                ).format(source=source)
                 if message_type in {
                     MESSAGES.BATCH_READY_FOR_REVIEW,
                     MESSAGES.BATCH_REVIEWERS_UPDATED,
@@ -84,7 +85,7 @@ class EmailAdapter(AdapterBase):
                     subject = _("Multiple applications are now ready for your review")
             elif message_type in {MESSAGES.REVIEW_REMINDER}:
                 subject = _(
-                    "Reminder: Application ready to review: {source.title}"
+                    "Reminder: Application ready to review: {source.title_text_display}"
                 ).format(source=source)
             elif message_type in [
                 MESSAGES.SENT_TO_COMPLIANCE,
@@ -133,7 +134,7 @@ class EmailAdapter(AdapterBase):
             else:
                 try:
                     subject = source.page.specific.subject or _(
-                        "Your application to {org_long_name}: {source.title}"
+                        "Your application to {org_long_name}: {source.title_text_display}"
                     ).format(org_long_name=settings.ORG_LONG_NAME, source=source)
                 except AttributeError:
                     subject = _("Your {org_long_name} Project: {source.title}").format(
@@ -150,7 +151,7 @@ class EmailAdapter(AdapterBase):
         from hypha.apply.funds.workflow import PHASES
 
         submission = source
-        # Retrive status index to see if we are going forward or backward.
+        # Retrieve status index to see if we are going forward or backward.
         old_index = list(dict(PHASES).keys()).index(old_phase.name)
         target_index = list(dict(PHASES).keys()).index(submission.status)
         is_forward = old_index < target_index
@@ -205,23 +206,6 @@ class EmailAdapter(AdapterBase):
             **kwargs,
         )
 
-    def handle_project_created(self, source, **kwargs):
-        from hypha.apply.projects.models import ProjectSettings
-
-        request = kwargs.get("request")
-        project_settings = ProjectSettings.for_request(request)
-        if project_settings.vendor_setup_required:
-            return self.render_message(
-                "messages/email/vendor_setup_needed.html", source=source, **kwargs
-            )
-
-    def handle_vendor_updated(self, source, **kwargs):
-        return self.render_message(
-            "messages/email/vendor_updated.html",
-            source=source,
-            **kwargs,
-        )
-
     def handle_determination(self, determination, source, **kwargs):
         submission = source
         if determination.send_notice:
@@ -264,8 +248,11 @@ class EmailAdapter(AdapterBase):
 
     def notify_comment(self, **kwargs):
         comment = kwargs["comment"]
-        source = kwargs["source"]
-        if not comment.priviledged and not comment.user == source.user:
+        recipient = kwargs["recipient"]
+        # Pass the user object to render_message rather than the email string
+        recipient_obj = User.objects.get(email__exact=recipient)
+        kwargs["recipient"] = recipient_obj
+        if not comment.priviledged:
             return self.render_message("messages/email/comment.html", **kwargs)
 
     def recipients(self, message_type, source, user, **kwargs):
@@ -398,18 +385,36 @@ class EmailAdapter(AdapterBase):
         if message_type == MESSAGES.APPROVE_INVOICE:
             if user.is_apply_staff:
                 return get_compliance_email(target_user_gps=[FINANCE_GROUP_NAME])
-            if settings.INVOICE_EXTENDED_WORKFLOW and user.is_finance_level_1:
-                finance_2_users_email = (
-                    User.objects.active()
-                    .filter(groups__name=FINANCE_GROUP_NAME)
-                    .filter(groups__name=APPROVER_GROUP_NAME)
-                    .values_list("email", flat=True)
-                )
-                return finance_2_users_email
             return []
 
         if isinstance(source, get_user_model()):
             return user.email
+
+        ApplicationSubmission = apps.get_model("funds", "ApplicationSubmission")
+        Project = apps.get_model("application_projects", "Project")
+        if message_type == MESSAGES.COMMENT:
+            # Comment handling for Submissions
+            if isinstance(source, ApplicationSubmission):
+                recipients: List[str] = [source.user.email]
+
+                comment = kwargs["related"]
+                if partners := list(source.partners.values_list("email", flat=True)):
+                    if comment.visibility == PARTNER:
+                        recipients = partners
+                    elif comment.visibility in [APPLICANT_PARTNERS, ALL]:
+                        recipients += partners
+
+                try:
+                    recipients.remove(comment.user.email)
+                except ValueError:
+                    pass
+
+                return recipients
+
+            # Comment handling for Projects
+            if isinstance(source, Project) and user == source.user:
+                return []
+
         return [source.user.email]
 
     def batch_recipients(self, message_type, sources, **kwargs):
@@ -448,7 +453,12 @@ class EmailAdapter(AdapterBase):
             )
 
     def partners_updated_partner(self, added, removed, **kwargs):
-        for _partner in added:
+        if added:
+            recipient = kwargs["recipient"]
+            # Pass the user object to render_message rather than the email string
+            recipient_obj = User.objects.get(email__exact=recipient)
+            kwargs["recipient"] = recipient_obj
+
             return self.render_message(
                 "messages/email/partners_update_partner.html", **kwargs
             )

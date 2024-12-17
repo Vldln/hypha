@@ -10,8 +10,8 @@
 
         {% if perms.wagtailadmin.access_admin %}
             <a href="{% url 'wagtailadmin_home' %}" class="button button--primary">
-                {% heroicon_mini "wrench-screwdriver" size=20 class="mr-1 inline align-text-bottom" %}
-                {% trans "Admin" %}
+                {% heroicon_solid "cog-6-tooth" size=20 class="me-1 inline align-text-bottom" aria_hidden=true %}
+                {% trans "Administration" %}
             </a>
         {% endif %}
     {% endadminbar %}
@@ -26,7 +26,7 @@
              role="tablist" aria-label="Invoice Tabs"
              x-data="{ tab: '{% trans "Active" %}' }"
         >
-            <section class="section section--with-options">
+            <section class="flex flex-col justify-between items-center md:flex-row">
                 <h4 class="heading heading--normal heading--no-margin">{% trans 'Invoices' %} </h4>
                 <nav>
                     <a class="tab__item tab__item--alt"
@@ -103,6 +103,5 @@
 
 {% block extra_js %}
     {{ my_reviewed.filterset.form.media.js }}
-    <script src="{% static 'js/url-search-params.js' %}"></script>
     <script src="{% static 'js/submission-filters.js' %}"></script>
 {% endblock %}

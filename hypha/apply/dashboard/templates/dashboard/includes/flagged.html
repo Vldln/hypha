@@ -5,11 +5,13 @@
     {% trans "Your flagged submissions" %}
 </h2>
 
-{% if my_flagged.data %}
-    {% render_table my_flagged %}
+{% if my_flagged.table.data %}
+
+    {% render_table my_flagged.table %}
+
     {% if display_more %}
         <div class="all-submissions-table__more">
-            <a href="{% url 'apply:submissions:flagged' %}">{% trans "Show all" %}</a>
+            <a href="{% url 'apply:submissions:list' %}?query=flagged:@me">{% trans "Show all" %}</a>
         </div>
     {% endif %}
 {% endif %}

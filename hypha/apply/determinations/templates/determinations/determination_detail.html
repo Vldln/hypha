@@ -6,19 +6,18 @@
 {% block content %}
     {% adminbar %}
         {% slot back_link %}
-            <a class="simplified__submissions-link" href="{{ determination.submission.get_absolute_url }}">
+            <a class="admin-bar__back-link" href="{{ determination.submission.get_absolute_url }}">
                 {% trans "View submission" %}
             </a>
         {% endslot %}
 
         {% slot header %} {% trans "Determination" %} {% if determination.is_draft %}[{% trans "DRAFT" %}] {% endif %}{% endslot %}
-        {% slot sub_heading %}{% trans "For" %} <a class="text-blue-300 hover:underline" href="{% url "funds:submissions:detail" determination.submission.id %}">{{ determination.submission.title }}</a>{% endslot %}
+        {% slot sub_heading %}{% trans "For" %} <a class="text-blue-300 hover:underline" href="{% url "funds:submissions:detail" determination.submission.id %}">{{ determination.submission.title_text_display }}</a>{% endslot %}
 
     {% endadminbar %}
 
     <div class="flex justify-between pt-2 mb-2 mt-2 max-w-[50em] border-b">
-
-        <h5 class="determination-outcome mb-4">
+        <h5>
             {% trans "Determination" %}: {{ determination.get_outcome_display }}
         </h5>
         {% if request.user.is_apply_staff %}

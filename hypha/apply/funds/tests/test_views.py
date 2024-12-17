@@ -1,10 +1,10 @@
 import re
 from datetime import timedelta
 
+import wagtail.blocks
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
@@ -47,7 +47,7 @@ from ..models import (
     ReviewerSettings,
     ScreeningStatus,
 )
-from ..views import SubmissionDetailSimplifiedView, SubmissionDetailView
+from ..views import SubmissionDetailView
 from .factories import CustomFormFieldsFactory
 
 
@@ -60,6 +60,39 @@ def prepare_form_data(submission, **kwargs):
         data[field_id] = value
 
     return CustomFormFieldsFactory.form_response(submission.form_fields, data)
+
+
+def check_form_fields_equality(form_fields_1, form_fields_2):
+    for form_field_1, form_field_2 in zip(form_fields_1, form_fields_2, strict=False):
+        if form_field_1.block != form_field_2.block:  # The block types must be the same
+            return False
+
+        # Check if the form field values are StructValues (composite types)
+        if isinstance(form_field_1.value, wagtail.blocks.StructValue):
+            # Iterate through both StructValue fields and compare their key-value pairs
+            for (key_1, field_value_1), (key_2, field_value_2) in zip(
+                form_field_1.value.items(), form_field_2.value.items(), strict=False
+            ):
+                if key_1 != key_2:  # Keys (field_labels, etc.) must match
+                    return False
+
+                # Check if the values for these keys are equal
+                if field_value_1 != field_value_2:
+                    # If values aren't equal, ensure they are of the same type
+                    if not isinstance(field_value_1, type(field_value_2)):
+                        return False
+
+                    # If the values are ListValues (e.g., multiple choice), compare their individual elements
+                    if isinstance(field_value_1, wagtail.blocks.list_block.ListValue):
+                        for item_value_1, item_value_2 in zip(
+                            field_value_1, field_value_2, strict=False
+                        ):
+                            if item_value_1 != item_value_2:
+                                return False
+        else:
+            if form_field_1.value != form_fields_2.value:
+                return False
+    return True
 
 
 class BaseSubmissionViewTestCase(BaseViewTestCase):
@@ -97,7 +130,9 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
     def test_can_progress_phase(self):
         next_status = "internal_review"
         self.post_page(
-            self.submission, {"form-submitted-progress_form": "", "action": next_status}
+            self.submission,
+            {"form-submitted-progress_form": "", "action": next_status},
+            view_name="progress",
         )
 
         submission = self.refresh(self.submission)
@@ -109,7 +144,8 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         )
         response = self.post_page(
             submission,
-            {"form-submitted-progress_form": "", "action": "invited_to_proposal"},
+            {"progress_form": "", "action": "invited_to_proposal"},
+            view_name="progress",
         )
 
         # Invited for proposal is a a determination, so this will redirect to the determination form.
@@ -117,7 +153,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             "funds:submissions:determinations:form",
             kwargs={"submission_pk": submission.id},
         )
-        self.assertRedirects(response, f"{url}?action=invited_to_proposal")
+        assert response.url == f"{url}?action=invited_to_proposal"
 
     def test_new_form_after_progress(self):
         submission = ApplicationSubmissionFactory(
@@ -135,7 +171,10 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         self.assertNotEqual(stage, new_stage)
 
         get_forms = submission.get_from_parent("get_defined_fields")
-        self.assertEqual(submission.form_fields, get_forms(new_stage))
+
+        self.assertTrue(
+            check_form_fields_equality(submission.form_fields, get_forms(new_stage))
+        )
         self.assertNotEqual(submission.form_fields, get_forms(stage))
 
     def test_cant_progress_stage_if_not_lead(self):
@@ -157,7 +196,9 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         DeterminationFactory(submission=submission, rejected=True, submitted=True)
 
         self.post_page(
-            submission, {"form-submitted-progress_form": "", "action": "rejected"}
+            submission,
+            {"form-submitted-progress_form": "", "action": "rejected"},
+            view_name="progress",
         )
 
         submission = self.refresh(submission)
@@ -168,7 +209,9 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         DeterminationFactory(submission=submission, accepted=True, submitted=True)
 
         response = self.post_page(
-            submission, {"form-submitted-progress_form": "", "action": "rejected"}
+            submission,
+            {"progress_form": "", "action": "rejected"},
+            view_name="progress",
         )
         self.assertContains(response, "you tried to progress")
 
@@ -228,15 +271,19 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         screening_outcome2.save()
         self.submission.screening_statuses.clear()
         self.submission.screening_statuses.add(screening_outcome2)
-        self.post_page(
-            self.submission,
-            {
-                "form-submitted-screening_form": "",
-                "screening_statuses": [screening_outcome1.id, screening_outcome2.id],
-            },
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
+        )
+        self.client.post(
+            url,
+            {"action": screening_outcome1.id},
+            secure=True,
+            follow=True,
         )
         submission = self.refresh(self.submission)
-        self.assertEqual(submission.screening_statuses.count(), 2)
+        status = submission.get_current_screening_status()
+        assert status == screening_outcome1
 
     def test_can_view_submission_screening_block(self):
         ScreeningStatus.objects.all().delete()
@@ -250,17 +297,23 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         screening_outcome2.default = True
         screening_outcome2.save()
         self.submission.screening_statuses.clear()
-        response = self.get_page(self.submission)
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
+        )
+        response = self.client.get(
+            url,
+            secure=True,
+            follow=True,
+        )
         self.assertContains(response, "Screening decision")
 
-    def test_cant_view_submission_screening_block(self):
-        """
-        If defaults are not set screening decision block is not visible
-        """
+        # if there are no screening statuses, the block should not be visible
         ScreeningStatus.objects.all().delete()
         self.submission.screening_statuses.clear()
-        response = self.get_page(self.submission)
-        self.assertNotContains(response, "Screening decision")
+        response = self.client.get(url, secure=True, follow=True)
+        # it returns 204 status code
+        self.assertEqual(response.status_code, 204)
 
     def test_can_create_project(self):
         # check submission doesn't already have a Project
@@ -272,10 +325,11 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         self.post_page(
             self.submission,
             {
-                "form-submitted-project_create_form": "",
+                "project_create_form": "",
                 "project_lead": self.user.id,
                 "submission": self.submission.id,
             },
+            view_name="create_project",
         )
 
         project = Project.objects.order_by("-pk").first()
@@ -291,7 +345,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             pattern = re.compile(rf"\s*{button_text}\s*")
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string=pattern)
             )
             self.assertEqual(len(buttons), 1)
@@ -316,7 +370,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             pattern = re.compile(rf"\s*{button_text}\s*")
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string=pattern)
             )
             self.assertEqual(len(buttons), 0)
@@ -343,29 +397,29 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
     def test_screen_application_primary_action_is_displayed(self):
         ScreeningStatus.objects.all().delete()
         # Submission not screened
+        screening_outcome_yes = ScreeningStatusFactory()
+        screening_outcome_yes.yes = False
+        screening_outcome_yes.default = True
+        screening_outcome_yes.save()
         screening_outcome = ScreeningStatusFactory()
-        screening_outcome.yes = False
+        screening_outcome.yes = True
         screening_outcome.default = True
         screening_outcome.save()
         self.submission.screening_statuses.clear()
         self.submission.screening_statuses.add(screening_outcome)
-        response = self.get_page(self.submission)
-        buttons = (
-            BeautifulSoup(response.content, "html5lib")
-            .find(class_="sidebar")
-            .find_all("a", string="Screen application")
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
         )
-        self.assertEqual(len(buttons), 1)
+        response = self.client.get(
+            url,
+            secure=True,
+            follow=True,
+        )
+        self.assertContains(response, "Screening decision")
+        buttons = BeautifulSoup(response.content, "html5lib").find_all("button")
+        self.assertEqual(len(buttons), 2)
         self.submission.screening_statuses.clear()
-
-    def test_screen_application_primary_action_is_not_displayed(self):
-        response = self.get_page(self.submission)
-        buttons = (
-            BeautifulSoup(response.content, "html5lib")
-            .find(class_="sidebar")
-            .find_all("a", string="Screen application")
-        )
-        self.assertEqual(len(buttons), 0)
 
     def test_can_see_create_review_primary_action(self):
         def assert_create_review_displayed(submission, button_text):
@@ -374,7 +428,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             pattern = re.compile(rf"\s*{button_text}\s*")
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string=pattern)
             )
             self.assertEqual(len(buttons), 1)
@@ -413,7 +467,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             pattern = re.compile(rf"\s*{button_text}\s*")
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string=pattern)
             )
             self.assertEqual(len(buttons), 0)
@@ -448,7 +502,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
                 .find(class_="sidebar")
-                .find_all("a", class_="button--primary", string="Assign reviewers")
+                .find_all("button", class_="button--primary", string="Assign reviewers")
             )
             self.assertEqual(len(buttons), 1)
 
@@ -513,7 +567,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
                 .find(class_="sidebar")
-                .find_all("a", class_="button--white", string="Reviewers")
+                .find_all("button", class_="button--white", string="Reviewers")
             )
             self.assertEqual(len(buttons), 1)
 
@@ -538,7 +592,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             response = self.get_page(submission)
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string="View determination")
             )
             self.assertEqual(len(buttons), 1)
@@ -562,7 +616,7 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
             response = self.get_page(submission)
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string="View determination")
             )
             self.assertEqual(len(buttons), 0)
@@ -616,6 +670,40 @@ class TestStaffSubmissionView(BaseSubmissionViewTestCase):
         response = SubmissionDetailView.as_view()(request, pk=submission.pk)
         self.assertEqual(response.status_code, 200)
 
+    @override_settings(APPLICATION_TRANSLATIONS_ENABLED=True)
+    def test_staff_can_see_translate_primary_action(self):
+        def assert_view_translate_displayed(submission):
+            response = self.get_page(submission)
+            buttons = (
+                BeautifulSoup(response.content, "html5lib")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
+                .find_all("button")
+            )
+
+            self.assertEqual(
+                len([button.text for button in buttons if "Translate" in button.text]),
+                1,
+            )
+
+        assert_view_translate_displayed(self.submission)
+
+    @override_settings(APPLICATION_TRANSLATIONS_ENABLED=False)
+    def test_staff_cant_see_translate_primary_action(self):
+        def assert_view_translate_displayed(submission):
+            response = self.get_page(submission)
+            buttons = (
+                BeautifulSoup(response.content, "html5lib")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
+                .find_all("button")
+            )
+
+            self.assertEqual(
+                len([button.text for button in buttons if "Translate" in button.text]),
+                0,
+            )
+
+        assert_view_translate_displayed(self.submission)
+
 
 class TestReviewersUpdateView(BaseSubmissionViewTestCase):
     user_factory = StaffFactory
@@ -632,7 +720,7 @@ class TestReviewersUpdateView(BaseSubmissionViewTestCase):
         if reviewers is None:
             reviewers = []
         data = {
-            "form-submitted-reviewer_form": "",
+            "reviewer_form": "",
             "reviewer_reviewers": [r.id for r in reviewers],
         }
         data.update(
@@ -641,7 +729,7 @@ class TestReviewersUpdateView(BaseSubmissionViewTestCase):
                 for role, reviewer in zip(self.roles, reviewer_roles, strict=False)
             }
         )
-        return self.post_page(submission, data)
+        return self.post_page(submission, data, view_name="reviewers_update")
 
     def test_lead_can_add_staff_single(self):
         submission = ApplicationSubmissionFactory(lead=self.user)
@@ -809,7 +897,7 @@ class TestReviewerSubmissionView(BaseSubmissionViewTestCase):
             pattern = re.compile(rf"\s*{button_text}\s*")
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string=pattern)
             )
             self.assertEqual(len(buttons), 1)
@@ -898,7 +986,7 @@ class TestReviewerSubmissionView(BaseSubmissionViewTestCase):
             response = self.get_page(submission)
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string="View determination")
             )
             self.assertEqual(len(buttons), 1)
@@ -1059,6 +1147,33 @@ class TestReviewerSubmissionView(BaseSubmissionViewTestCase):
         response = self.get_page(submission)
         self.assertEqual(response.status_code, 200)
 
+    def test_can_view_applicant_pii(self):
+        submission = ApplicationSubmissionFactory(
+            with_external_review=True,
+            status="ext_external_review",
+            user=self.applicant,
+            reviewers=[self.user],
+        )
+
+        response = self.get_page(submission)
+
+        self.assertContains(response, str(self.applicant))
+        self.assertContains(response, self.applicant.email)
+
+    @override_settings(HIDE_IDENTITY_FROM_REVIEWERS=True)
+    def test_cant_view_applicant_pii(self):
+        submission = ApplicationSubmissionFactory(
+            with_external_review=True,
+            status="ext_external_review",
+            user=self.applicant,
+            reviewers=[self.user],
+        )
+
+        response = self.get_page(submission)
+
+        self.assertNotContains(response, str(self.applicant))
+        self.assertNotContains(response, self.applicant.email)
+
 
 class TestApplicantSubmissionView(BaseSubmissionViewTestCase):
     user_factory = ApplicantFactory
@@ -1151,26 +1266,24 @@ class TestApplicantSubmissionView(BaseSubmissionViewTestCase):
         response = self.get_page(submission, "edit")
         self.assertEqual(response.status_code, 403)
 
-    def test_cant_screen_submission(self):
+    def test_cant_see_or_screen_submission(self):
         """
         Test that an applicant cannot set the screening decision
         and that they don't see the screening decision form.
         """
-        screening_outcome = ScreeningStatusFactory()
-        response = self.post_page(
-            self.submission,
-            {
-                "form-submitted-screening_form": "",
-                "screening_statuses": [screening_outcome.id],
-            },
+        outcome = ScreeningStatusFactory()
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
         )
-        self.assertNotIn("screening_form", response.context_data)
-        submission = self.refresh(self.submission)
-        self.assertNotIn(screening_outcome, submission.screening_statuses.all())
+        response = self.client.get(url, secure=True, follow=True)
+        self.assertEqual(response.status_code, 204)
 
-    def test_cant_see_screening_status_block(self):
-        response = self.get_page(self.submission)
-        self.assertNotContains(response, "Screening decision")
+        # trying to post to the screening decision form
+        response = self.client.post(
+            url, {"action": outcome.id}, secure=True, follow=True
+        )
+        self.assertEqual(response.status_code, 204)
 
     def test_cant_see_add_determination_primary_action(self):
         def assert_add_determination_not_displayed(submission, button_text):
@@ -1256,7 +1369,7 @@ class TestApplicantSubmissionView(BaseSubmissionViewTestCase):
             response = self.get_page(submission)
             buttons = (
                 BeautifulSoup(response.content, "html5lib")
-                .find(class_="js-actions-sidebar")
+                .find("div", attrs={"data-testid": "sidebar-primary-actions"})
                 .find_all("a", class_="button--primary", string="View determination")
             )
             self.assertEqual(len(buttons), 1)
@@ -1292,6 +1405,24 @@ class TestApplicantSubmissionView(BaseSubmissionViewTestCase):
         # Phase: ready-for-determination, draft determination
         DeterminationFactory(submission=submission, accepted=True, submitted=False)
         assert_view_determination_not_displayed(submission)
+
+    @override_settings(HIDE_STAFF_IDENTITY=True)
+    def test_applicant_cant_see_hidden_lead(self):
+        lead = StaffFactory()
+        submission = ApplicationSubmissionFactory(user=self.user, lead=lead)
+        DeterminationFactory(submission=submission, accepted=True, submitted=True)
+        response = self.get_page(submission)
+        self.assertNotContains(response, str(lead))
+
+    def test_applicant_can_see_lead(self):
+        lead = StaffFactory()
+        submission = ApplicationSubmissionFactory(user=self.user, lead=lead)
+        response = self.client.get(
+            reverse("apply:submissions:partial-get-lead", kwargs={"pk": submission.pk}),
+            secure=True,
+            follow=True,
+        )
+        self.assertContains(response, str(lead))
 
 
 class TestRevisionsView(BaseSubmissionViewTestCase):
@@ -1533,15 +1664,17 @@ class TestSuperUserSubmissionView(BaseSubmissionViewTestCase):
         screening_outcome2.save()
         self.submission.screening_statuses.clear()
         self.submission.screening_statuses.add(screening_outcome2)
-        self.post_page(
-            self.submission,
-            {
-                "form-submitted-screening_form": "",
-                "screening_statuses": [screening_outcome1.id, screening_outcome2.id],
-            },
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
         )
-        submission = self.refresh(self.submission)
-        self.assertEqual(submission.screening_statuses.count(), 2)
+        self.client.post(
+            url,
+            data={"action": screening_outcome1.id},
+            secure=True,
+            follow=True,
+        )
+        assert self.submission.get_current_screening_status() == screening_outcome1
 
     def test_can_screen_applications_in_final_status(self):
         """
@@ -1554,57 +1687,29 @@ class TestSuperUserSubmissionView(BaseSubmissionViewTestCase):
         screening_outcome1.yes = True
         screening_outcome1.save()
         screening_outcome2 = ScreeningStatusFactory()
-        screening_outcome2.yes = True
+        screening_outcome2.yes = False
         screening_outcome2.default = True
         screening_outcome2.save()
         submission.screening_statuses.add(screening_outcome2)
-        response = self.post_page(
-            submission,
-            {
-                "form-submitted-screening_form": "",
-                "screening_statuses": [screening_outcome1.id, screening_outcome2.id],
-            },
+        url = reverse(
+            "funds:submissions:partial-screening-card",
+            kwargs={"pk": self.submission.pk},
         )
-        submission = self.refresh(submission)
-        self.assertEqual(response.context_data["screening_form"].should_show, True)
-        self.assertEqual(submission.screening_statuses.count(), 2)
+        response = self.client.post(
+            url,
+            data={"action": screening_outcome1.id},
+            secure=True,
+            follow=True,
+        )
+        assert response.status_code == 200
+        assert self.submission.get_current_screening_status() == screening_outcome1
 
         # Check that an activity was created that should only be viewable internally
         activity = Activity.objects.filter(
-            message__contains="Screening decision"
+            message__icontains="Screening decision"
         ).first()
+        assert activity
         self.assertEqual(activity.visibility, TEAM)
-
-
-class TestSubmissionDetailSimplifiedView(TestCase):
-    def test_staff_only(self):
-        factory = RequestFactory()
-        submission = ApplicationSubmissionFactory()
-        ProjectFactory(submission=submission)
-
-        request = factory.get(f"/submission/{submission.pk}")
-        request.user = StaffFactory()
-
-        response = SubmissionDetailSimplifiedView.as_view()(request, pk=submission.pk)
-        self.assertEqual(response.status_code, 200)
-
-        request.user = ApplicantFactory()
-        with self.assertRaises(PermissionDenied):
-            SubmissionDetailSimplifiedView.as_view()(request, pk=submission.pk)
-
-    def test_project_required(self):
-        factory = RequestFactory()
-        submission = ApplicationSubmissionFactory()
-
-        request = factory.get(f"/submission/{submission.pk}")
-        request.user = StaffFactory()
-
-        with self.assertRaises(Http404):
-            SubmissionDetailSimplifiedView.as_view()(request, pk=submission.pk)
-
-        ProjectFactory(submission=submission)
-        response = SubmissionDetailSimplifiedView.as_view()(request, pk=submission.pk)
-        self.assertEqual(response.status_code, 200)
 
 
 class BaseSubmissionFileViewTestCase(BaseViewTestCase):
@@ -1655,7 +1760,7 @@ class TestAnonSubmissionFileView(BaseSubmissionFileViewTestCase):
         submission = ApplicationSubmissionFactory()
         response = self.get_page(submission)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.redirect_chain), 2)
+        self.assertEqual(len(response.redirect_chain), 1)
         for path, _ in response.redirect_chain:
             self.assertIn(reverse(settings.LOGIN_URL), path)
 
@@ -1745,7 +1850,7 @@ class TestUpdateReviewersMixin(BaseSubmissionViewTestCase):
         if reviewers is None:
             reviewers = []
         data = {
-            "form-submitted-reviewer_form": "",
+            "reviewer_form": "",
             "reviewer_reviewers": [r.id for r in reviewers],
         }
         data.update(
@@ -1754,7 +1859,7 @@ class TestUpdateReviewersMixin(BaseSubmissionViewTestCase):
                 for role, reviewer in zip(self.roles, reviewer_roles, strict=False)
             }
         )
-        return self.post_page(submission, data)
+        return self.post_page(submission, data, view_name="reviewers_update")
 
     def test_submission_transition_all_reviewer_roles_not_assigned(self):
         submission = ApplicationSubmissionFactory(lead=self.user, status=INITIAL_STATE)
