@@ -13,4 +13,4 @@
 
 --
 {{ org_long_name }}
-{% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}
+https://equalit.ie
