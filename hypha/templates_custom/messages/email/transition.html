@@ -7,3 +7,11 @@
 
 {% trans "Please submit any questions related to your application here" %}: {{ request.scheme }}://{{ request.get_host }}{{ source.get_absolute_url }}#communications
 {% endblock %}{# fmt:on #}
+
+{% block more_info %}
+    {% if request.user != source.user %}
+        {% trans "Link to your application" %}: {{ request.scheme }}://{{ request.get_host }}{{ source.get_absolute_url }}
+        {% trans "If you have any questions, please submit them here" %}: {{ request.scheme }}://{{ request.get_host }}{{ source.get_absolute_url }}#communications
+        {% blocktrans %}If you have any issues accessing the submission system or other general inquiries, please email us at {{ ORG_EMAIL }}{% endblocktrans %}
+    {% endif %}
+{% endblock %}
