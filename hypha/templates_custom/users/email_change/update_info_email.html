@@ -1,0 +1,11 @@
+{% load i18n wagtailadmin_tags %}{% base_url_setting as base_url %}{% firstof name username as user %}
+{% blocktrans %}Dear {{ user }},{% endblocktrans %}
+
+{% blocktrans %}There was an attempt to change the email address associated with your account on the {{ org_long_name }}'s Grant Programs & Opportunities website. If you did not authorize this action, please contact our support team at {{ org_email }} {% endblocktrans %}
+
+
+{% blocktrans %}Kind Regards,{% endblocktrans %}
+
+--
+{{ org_long_name }}
+{% if site %}{{ site.root_url }}{% else %}{{ base_url }}{% endif %}
